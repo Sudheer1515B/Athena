@@ -13,11 +13,15 @@ class ProfilePage extends StatefulWidget {
     required this.api,
     required this.benchConnected,
     required this.transport,
+    required this.benchChannelCount,
+    required this.benchMaxFrames,
     required this.onUpload,
   });
   final BenchApi api;
   final bool benchConnected;
   final String? transport;
+  final int benchChannelCount;
+  final int benchMaxFrames;
   final Future<void> Function(String) onUpload;
 
   @override
@@ -28,7 +32,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final startController = TextEditingController(text: '40');
   final endController = TextEditingController(text: '44');
   final rateController = TextEditingController(text: '50');
-  final outputs = <String?>[null, null, null, null];
+  late List<String?> outputs;
   Map<String, dynamic>? source;
   Map<String, dynamic>? profile;
   Map<String, dynamic>? sourceTrace;
@@ -39,7 +43,23 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    outputs = List<String?>.filled(widget.benchChannelCount, null);
     restoreRecent();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfilePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.benchChannelCount != outputs.length) {
+      final old = outputs;
+      outputs = List<String?>.generate(
+        widget.benchChannelCount,
+        (index) => index < old.length ? old[index] : null,
+      );
+      profile = null;
+      profileTrace = null;
+      sourceTrace = null;
+    }
   }
 
   Future<void> restoreRecent() async {
@@ -150,8 +170,13 @@ class _ProfilePageState extends State<ProfilePage> {
           .toList();
       final duration = (details['duration_us'] as num).toDouble() / 1000000;
       final gaps = details['gaps'] as List;
-      final start = gaps.isNotEmpty && duration >= 44 ? 40.0 : 0.0;
-      final end = math.min(start + 4.0, duration);
+      final suppliedSample =
+          result['sha256'] ==
+          '8b9d117be6e4c6f9c316d880e06ba4c5c5a7d736807206b49a6a0c10209dfc1f';
+      final start = suppliedSample || (gaps.isNotEmpty && duration >= 44)
+          ? 40.0
+          : 0.0;
+      final end = math.min(start + (suppliedSample ? 60.0 : 4.0), duration);
       setState(() {
         source = result;
         profile = null;
@@ -192,8 +217,8 @@ class _ProfilePageState extends State<ProfilePage> {
         'start_us': startUs,
         'end_us': endUs,
         'rate_hz': rate,
-        'channel_count': 4,
-        'maxframes': 8000,
+        'channel_count': outputs.length,
+        'maxframes': widget.benchMaxFrames,
         'mapping': [
           for (var i = 0; i < outputs.length; i++)
             {
@@ -421,11 +446,26 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Reference bench draft: 4 outputs · maximum 8,000 frames. '
-          'Live INFO will be checked before upload.',
+          'Draft uses the connected bench capabilities when available. '
+          'Live INFO is checked again before upload.',
           style: TextStyle(color: Palette.muted, fontSize: 12.5),
         ),
         const SizedBox(height: 10),
+        if (source?['sha256'] ==
+            '8b9d117be6e4c6f9c316d880e06ba4c5c5a7d736807206b49a6a0c10209dfc1f') ...[
+          OutlinedButton(
+            onPressed: busy
+                ? null
+                : () {
+                    startController.text = '40';
+                    endController.text = '100';
+                    rateController.text = '50';
+                    invalidateDraft();
+                  },
+            child: const Text('Use supplied 60 s flight segment'),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (inspection != null)
           FilledButton(
             onPressed: busy ? null : compile,
@@ -445,7 +485,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _mapCard() => BenchCard(
     title:
-        '3 · Channel map · ${outputs.where((item) => item != null).length} of 4 mapped',
+        '3 · Channel map · ${outputs.where((item) => item != null).length} of ${outputs.length} mapped',
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -559,11 +599,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 ? null
                 : () => widget.onUpload(profile!['id'].toString()),
             icon: const Icon(Icons.upload, size: 18),
-            label: Text(
-              widget.transport == 'SIMULATOR'
-                  ? 'Upload to simulator'
-                  : 'Upload to USB bench',
-            ),
+            label: Text(switch (widget.transport) {
+              'SIMULATOR' => 'Upload to simulator',
+              'WIFI' => 'Upload to Wi-Fi bench',
+              _ => 'Upload to USB bench',
+            }),
           ),
           if (!widget.benchConnected) ...[
             const SizedBox(height: 8),

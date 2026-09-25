@@ -1,6 +1,6 @@
-# Athena prototype demo — official simulator first
+# Athena working demo — official simulator first
 
-The main demo uses the organizer's **supplied simulator** and Flutter dashboard. It proves the flight-log → profile → WDR upload → replay → counters flow without changing either physical ESP32 or the real bench's saved 100-frame profile. The two-board PWM check is optional independent hardware evidence.
+The main demo uses the organizer's **supplied simulator** and Flutter dashboard. It proves the flight-log → profile → WDR upload → replay → live pulse graph → durable session/counter history flow without changing either physical ESP32 or the real bench's saved 100-frame profile. The two-board PWM check is optional independent hardware evidence.
 
 ## Start two local services
 
@@ -21,14 +21,17 @@ In Terminal B:
 
 Open `http://127.0.0.1:8080` in a browser. Run only one backend and one simulator on these ports. Do not run the organizer's scorer against the same simulator during the live app demo; it takes over the TCP connection and may clear counters.
 
-## Two-minute live sequence
+## One-minute replay sequence
 
-1. **Settings:** Click **Connect local simulator**. Show `team=SIM`, four channels, and `maxframes=8000` from live `INFO`. The browser talks to Athena; Athena owns the simulator TCP connection.
-2. **Profile:** Import `RCOU.csv`. Use the 40–44 s window, 50 fps, C1–C4 → OUT0–OUT3. Click **Compile & validate**. Show source/command traces, **200 frames**, a 4-second cycle, and **SUM16 16982**.
-3. Click **Upload to simulator**. Athena sends `STOP`, `LOAD 50 200`, all 200 frames, and `COMMIT`, checking the simulator's returned checksum. This changes **only the simulator**.
-4. **Dashboard:** Click **Start 1 cycle**. Watch the state go RUNNING → STOPPED. Point to the authoritative lifetime cycle count and each channel's active hours. A fresh simulator run adds **1 cycle, 4 running seconds, and 4 active seconds per channel**. If the simulator has prior runs, compare before/after deltas instead of expecting a total of one.
+1. **Settings:** Click **Connect local simulator**. Show `team=SIM`, four channels, `maxframes=8000`, and acknowledged `TIME`. The browser talks to Athena; Athena owns the simulator TCP connection.
+2. **Profile:** Import the supplied, unchanged `RCOU.csv`. The sample preset selects 40–100 s, 50 fps, C1–C4 → OUT0–OUT3. Click **Compile & validate**. Show source/command previews, **3,000 frames**, **60 seconds per cycle**, and **SUM16 23174**. If an older 4-second draft restores, click **Use supplied 60 s flight segment** before compiling.
+3. Click **Upload to simulator**. Athena sends `STOP`, `LOAD 50 3000`, all 3,000 frames, and `COMMIT`, checking the returned checksum. This changes **only the simulator**.
+4. **Dashboard:** Click **Start 1 cycle**. Watch current-frame progress, live pulse widths, and the **sampled command-pulse graph** move for a minute. These are `STATUS` samples, not an oscilloscope or actuator feedback. You can demonstrate Pause/Resume while the run is active; leave it running to observe automatic completion.
+5. Show the lifetime cycle count and per-channel active hours. Then open **History** and refresh: the completed session and events are stored in SQLite and survive a backend restart. On the verified 60-second run, the simulator added **1 cycle, 60 running seconds**, and **32, 59, 56, 60 active seconds** on OUT0–OUT3 respectively. If the simulator has prior runs, compare deltas rather than expecting those lifetime totals.
 
-Suggested line: “Athena converts a recorded drone flight into an exact PWM command profile, uploads it before motion, and lets the bench clock replay it. The browser reads cycle and per-channel active-time counters back from the WDR simulator. This is the complete software prototype; our second ESP separately verified that the physical reference bench generates four 50 Hz PWM outputs.”
+For a fast smoke test, the earlier 40–44 s window remains valid: 200 frames, 4 seconds, SUM16 16982. The one-minute run is better for judging because the live graph and hour meters visibly change.
+
+Suggested line: “Athena converts an unmodified recorded flight into an exact PWM command profile, uploads it before motion, and lets the bench clock replay it. It shows sampled live commands and saves the bench's own cycle and per-channel active-time counters. Our second ESP separately verified that the physical reference bench generates four 50 Hz PWM outputs.”
 
 ## Optional real-output proof
 
@@ -42,6 +45,6 @@ The receiver previously measured commanded widths `1100,1300,1700,1900` as `1100
 
 ## What is proven and what remains
 
-- **Proven in Athena against the supplied simulator:** log import, deterministic 200-frame compilation, checksum-verified upload, one finite replay, and authoritative cycle/active-time counters. An end-to-end API check returned `cycles=1 run_s=4 active_s=4,4,4,4` on a fresh simulator instance.
+- **Proven in Athena against the supplied simulator:** log import, deterministic 3,000-frame compilation, checksum-verified upload, full 60-second finite replay, changing sampled pulse trace, authoritative counters, a completed durable session, and TIME acknowledgement. The end-to-end run added one cycle, 60 running seconds, and distinct per-channel active time. A 4-second smoke test also passed.
 - **Proven electrically on the reference bench:** four distinct physical PWM outputs arrive on the independent receiver at the intended channels, then return to 1500 µs idle without profile or counter loss.
-- **Not yet proven:** replay of the newly compiled profile on the real bench, physical servo movement/life, final Wi-Fi hardware integration, and durable per-run history in Athena. Uploading the compiled profile to the real bench would replace its saved 100-frame profile; do not do that during this preservation demo.
+- **Not yet proven:** replay of the newly compiled profile on the real bench, physical servo movement/life, and final Wi-Fi hardware integration. Athena now accepts a WDR TCP host/port for the venue bench, but that path has not been exercised against venue hardware. Uploading the compiled profile to the real bench would replace its saved 100-frame profile; do not do that during this preservation demo. Counter reset is available only on the simulator; the backend refuses it on physical benches to preserve their lifetime totals.

@@ -12,6 +12,12 @@ class AppState extends ChangeNotifier {
   BenchSnapshot? snapshot;
   String? error;
   bool loading = false;
+  bool historyLoading = false;
+  String? historyError;
+  List<Map<String, dynamic>> historySessions = const [];
+  List<Map<String, dynamic>> historyEvents = const [];
+  String? historyFromDate;
+  String? historyThroughDate;
   Timer? _retry;
   Timer? _poll;
   bool _disposed = false;
@@ -62,11 +68,47 @@ class AppState extends ChangeNotifier {
 
   Future<void> connectUsb(String port) => _operate(() => _api.connectUsb(port));
   Future<void> connectSimulator() => _operate(_api.connectSimulator);
+  Future<void> connectTcp(String host, int port) =>
+      _operate(() => _api.connectTcp(host, port));
   Future<void> disconnectBench() => _operate(_api.disconnectBench);
+  Future<void> setPulse(int channel, int widthUs) =>
+      _operate(() => _api.setPulse(channel, widthUs));
+  Future<void> syncTime() => _operate(_api.syncTime);
+  Future<void> clearSimulatorCounters() =>
+      _operate(_api.clearSimulatorCounters);
   Future<void> uploadProfile(String id) =>
       _operate(() => _api.uploadProfile(id));
   Future<void> control(String action, {int cycles = 1}) =>
       _operate(() => _api.control(action, cycles: cycles));
+
+  Future<void> loadHistory({String? fromDate, String? throughDate}) async {
+    if (_disposed || historyLoading) return;
+    if (fromDate != null || throughDate != null) {
+      historyFromDate = fromDate;
+      historyThroughDate = throughDate;
+    }
+    historyLoading = true;
+    historyError = null;
+    notifyListeners();
+    try {
+      final result = await Future.wait([
+        _api.historySessions(historyFromDate, historyThroughDate),
+        _api.historyEvents(historyFromDate, historyThroughDate),
+      ]);
+      historySessions = result[0];
+      historyEvents = result[1];
+    } catch (caught) {
+      historySessions = const [];
+      historyEvents = const [];
+      historyError = caught.toString().replaceFirst(
+        RegExp(r'^(Bad state|Exception): '),
+        '',
+      );
+    } finally {
+      historyLoading = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
 
   Future<void> _operate(Future<BenchSnapshot> Function() operation) async {
     loading = true;

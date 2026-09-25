@@ -14,6 +14,9 @@ class BenchSnapshot {
     required this.counters,
     required this.profile,
     required this.recentEvents,
+    required this.trace,
+    required this.timeSync,
+    required this.simulatorResetAllowed,
   });
 
   final String connectionState;
@@ -24,6 +27,9 @@ class BenchSnapshot {
   final Map<String, dynamic>? counters;
   final Map<String, dynamic>? profile;
   final List<String> recentEvents;
+  final List<TraceSample> trace;
+  final Map<String, dynamic>? timeSync;
+  final bool simulatorResetAllowed;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
     final connection = json['connection'];
@@ -53,8 +59,44 @@ class BenchSnapshot {
       recentEvents: (json['recent_events'] as List? ?? const [])
           .map((event) => event.toString())
           .toList(),
+      trace: (json['trace'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (sample) => TraceSample.fromJson(Map<String, dynamic>.from(sample)),
+          )
+          .toList(),
+      timeSync: json['time_sync'] is Map
+          ? Map<String, dynamic>.from(json['time_sync'] as Map)
+          : null,
+      simulatorResetAllowed: json['simulator_reset_allowed'] == true,
     );
   }
+}
+
+class TraceSample {
+  const TraceSample({
+    required this.sampledAt,
+    required this.pulseUs,
+    required this.frame,
+    required this.cycle,
+    required this.state,
+  });
+
+  final DateTime? sampledAt;
+  final List<int> pulseUs;
+  final int frame;
+  final int cycle;
+  final String state;
+
+  factory TraceSample.fromJson(Map<String, dynamic> json) => TraceSample(
+    sampledAt: DateTime.tryParse(json['sampled_at']?.toString() ?? ''),
+    pulseUs: (json['us'] as List? ?? const [])
+        .map((value) => (value as num).toInt())
+        .toList(),
+    frame: (json['frame'] as num?)?.toInt() ?? 0,
+    cycle: (json['cycle'] as num?)?.toInt() ?? 0,
+    state: json['state']?.toString() ?? 'UNKNOWN',
+  );
 }
 
 class BenchApi {
@@ -147,9 +189,77 @@ class BenchApi {
     ),
   );
 
+  Future<BenchSnapshot> connectTcp(String host, int port) async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(
+          await _client.post(
+            endpoint('bench/tcp/connect'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'host': host, 'port': port}),
+          ),
+        ),
+      );
+
+  Uri historyUri(String path, String? fromDate, String? throughDate) =>
+      endpoint(path).replace(
+        queryParameters: {
+          if (fromDate != null && fromDate.isNotEmpty) 'from_date': fromDate,
+          if (throughDate != null && throughDate.isNotEmpty)
+            'through_date': throughDate,
+        },
+      );
+
+  Future<List<Map<String, dynamic>>> historySessions(
+    String? fromDate,
+    String? throughDate,
+  ) async =>
+      (_decodeObject(
+                await _client.get(
+                  historyUri('history/sessions', fromDate, throughDate),
+                ),
+              )['items']
+              as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+
+  Future<List<Map<String, dynamic>>> historyEvents(
+    String? fromDate,
+    String? throughDate,
+  ) async =>
+      (_decodeObject(
+                await _client.get(
+                  historyUri('history/events', fromDate, throughDate),
+                ),
+              )['items']
+              as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+
   Future<BenchSnapshot> disconnectBench() async => BenchSnapshot.fromJson(
     _decodeObject(await _client.post(endpoint('bench/disconnect'))),
   );
+
+  Future<BenchSnapshot> setPulse(int channel, int widthUs) async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(
+          await _client.post(
+            endpoint('bench/set'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'channel': channel, 'width_us': widthUs}),
+          ),
+        ),
+      );
+
+  Future<BenchSnapshot> syncTime() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('bench/time-sync'))),
+  );
+
+  Future<BenchSnapshot> clearSimulatorCounters() async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(
+          await _client.post(endpoint('bench/simulator/clear-counters')),
+        ),
+      );
 
   Future<BenchSnapshot> uploadProfile(String profileId) async =>
       BenchSnapshot.fromJson(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 import socket
 import threading
@@ -27,7 +28,21 @@ class UsbBench:
         self.counters: dict[str, str] | None = None
         self.profile_id: str | None = None
         self.events: deque[str] = deque(maxlen=30)
+        self.trace: deque[dict] = deque(maxlen=180)
         self.transport = "USB"
+        self.time_synced_at: str | None = None
+
+    def _validate_info(self) -> None:
+        info = self.info or {}
+        if info.get("proto") != "1":
+            raise BenchError("Bench does not report WDR protocol version 1")
+        try:
+            channels = int(info["ch"])
+            maxframes = int(info["maxframes"])
+        except (KeyError, ValueError) as error:
+            raise BenchError("Bench INFO is missing valid channel or frame capacity") from error
+        if not 1 <= channels <= 16 or maxframes < 1:
+            raise BenchError("Bench reports unsupported channel or frame capacity")
 
     @property
     def connected(self) -> bool:
@@ -61,6 +76,8 @@ class UsbBench:
                 else:
                     raise BenchError("The USB port opened but the bench did not answer PING")
                 self.refresh()
+                self._validate_info()
+                self.sync_time()
             except Exception:
                 self.disconnect()
                 raise
@@ -75,6 +92,8 @@ class UsbBench:
             self.status = None
             self.counters = None
             self.profile_id = None
+            self.trace.clear()
+            self.time_synced_at = None
 
     def _line(self, deadline: float) -> str | None:
         if self._serial is None:
@@ -115,6 +134,7 @@ class UsbBench:
                         return line
                     elif line.startswith("ERR"):
                         raise BenchError(f"{value.split()[0]}: {line}")
+                self.disconnect()
                 raise BenchError(f"No reply to {value.split()[0]} within 2 seconds")
             except (OSError, UnicodeError) as error:
                 self.disconnect()
@@ -132,6 +152,18 @@ class UsbBench:
                 self.info = self.status = self.counters = None
                 raise
             self.info, self.status, self.counters = info, status, counters
+            try:
+                widths = [int(value) for value in status["us"].split(",")]
+                if len(widths) == int(info["ch"]):
+                    self.trace.append({
+                        "sampled_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                        "state": status.get("state"),
+                        "cycle": int(status.get("cycle", "0")),
+                        "frame": int(status.get("frame", "0")),
+                        "us": widths,
+                    })
+            except (KeyError, ValueError):
+                pass
             return self.snapshot()
 
     def upload(self, profile_id: str, canonical: dict, expected_sum: int) -> dict:
@@ -153,6 +185,7 @@ class UsbBench:
             # LOAD destroys the prior committed profile. Do not claim that a
             # profile is ready until every frame and COMMIT are acknowledged.
             self.profile_id = None
+            self.trace.clear()
             self.command(f"LOAD {rate} {len(frames)}")
             for index, frame in enumerate(frames):
                 self.command(f"F {index} {' '.join(map(str, frame))}")
@@ -175,7 +208,46 @@ class UsbBench:
             else:
                 raise BenchError("Unsupported bench control")
             self.command(command)
+            if action == "start":
+                self.trace.clear()
             return self.refresh()
+
+    def set_pulse(self, channel: int, width_us: int) -> dict:
+        with self._lock:
+            self.refresh()
+            if (self.status or {}).get("state") != "STOPPED":
+                raise BenchError("Manual pulse setting requires a stopped bench")
+            if not 0 <= channel < int(self.info["ch"]):
+                raise BenchError("Channel is outside the bench output range")
+            if not 500 <= width_us <= 2500:
+                raise BenchError("Pulse width must be 500–2500 µs")
+            self.command(f"SET {channel} {width_us}")
+            return self.refresh()
+
+    def sync_time(self) -> dict:
+        with self._lock:
+            self.command(f"TIME {int(time.time())}")
+            self.time_synced_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            return self.snapshot()
+
+    def clear_simulator_counters(self) -> dict:
+        with self._lock:
+            if not self.simulator_reset_allowed:
+                raise BenchError("Counter reset is disabled on physical benches")
+            self.refresh()
+            if (self.info or {}).get("team") != "SIM":
+                raise BenchError("Counter reset requires the supplied simulator")
+            if (self.status or {}).get("state") != "STOPPED":
+                raise BenchError("Counter reset requires a stopped simulator")
+            self.command("CLEAR")
+            return self.refresh()
+
+    @property
+    def simulator_reset_allowed(self) -> bool:
+        return (isinstance(self, TcpBench)
+                and self.expected_team == "SIM"
+                and self.port is not None
+                and self.port.startswith("127.0.0.1:"))
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -187,6 +259,10 @@ class UsbBench:
                 "counters": self.counters,
                 "profile": {"id": self.profile_id} if self.profile_id else None,
                 "recent_events": list(self.events),
+                "trace": list(self.trace),
+                "time_sync": {"status": "ACKNOWLEDGED", "at": self.time_synced_at}
+                    if self.time_synced_at else None,
+                "simulator_reset_allowed": self.simulator_reset_allowed,
             }
 
 
@@ -210,7 +286,7 @@ class SocketStream:
         except socket.timeout:
             return b""
         if not data:
-            raise OSError("Simulator TCP connection closed")
+            raise OSError("Bench TCP connection closed")
         return data
 
     def close(self) -> None:
@@ -219,24 +295,30 @@ class SocketStream:
 
 
 class TcpBench(UsbBench):
-    """WDR simulator on loopback TCP, reusing the proven command scheduler."""
+    """WDR simulator or Wi-Fi bench over TCP, reusing the command scheduler."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, expected_team: str | None = "SIM") -> None:
         super().__init__()
-        self.transport = "SIMULATOR"
+        self.expected_team = expected_team
+        self.transport = "SIMULATOR" if expected_team == "SIM" else "WIFI"
 
     def connect(self, host: str = "127.0.0.1", port: int = 3333) -> None:
         with self._lock:
             self.disconnect()
             sock = socket.create_connection((host, port), timeout=3.0)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(0.05)
             self._serial = SocketStream(sock)
             self.port = f"{host}:{port}"
             try:
                 self.command("PING")
                 self.refresh()
-                if (self.info or {}).get("team") != "SIM":
-                    raise BenchError("Connected TCP service is not the supplied WDR simulator")
+                self._validate_info()
+                if self.expected_team is not None and (self.info or {}).get("team") != self.expected_team:
+                    raise BenchError(f"Connected TCP service is not the expected {self.expected_team} bench")
+                if (self.info or {}).get("team") == "SIM":
+                    self.transport = "SIMULATOR"
+                self.sync_time()
             except Exception:
                 self.disconnect()
                 raise

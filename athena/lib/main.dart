@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'live_trace.dart';
 import 'profile_page.dart';
 import 'theme.dart';
 
@@ -58,10 +59,24 @@ class AthenaShell extends StatefulWidget {
 class _AthenaShellState extends State<AthenaShell> {
   AthenaPage page = AthenaPage.dashboard;
   final usbPort = TextEditingController(text: '/dev/cu.usbserial-0001');
+  final wifiHost = TextEditingController();
+  final wifiPort = TextEditingController(text: '3333');
+  final manualChannel = TextEditingController(text: '0');
+  final manualWidth = TextEditingController(text: '1500');
+  final cycleTarget = TextEditingController(text: '1');
+  final historyFrom = TextEditingController();
+  final historyThrough = TextEditingController();
 
   @override
   void dispose() {
     usbPort.dispose();
+    wifiHost.dispose();
+    wifiPort.dispose();
+    manualChannel.dispose();
+    manualWidth.dispose();
+    cycleTarget.dispose();
+    historyFrom.dispose();
+    historyThrough.dispose();
     super.dispose();
   }
 
@@ -98,6 +113,27 @@ class _AthenaShellState extends State<AthenaShell> {
                               .snapshot
                               ?.connection['transport']
                               ?.toString(),
+                          benchChannelCount:
+                              (int.tryParse(
+                                        widget
+                                                .state
+                                                .snapshot
+                                                ?.connection['bench']?['ch']
+                                                ?.toString() ??
+                                            '',
+                                      ) ??
+                                      4)
+                                  .clamp(1, 16),
+                          benchMaxFrames:
+                              int.tryParse(
+                                widget
+                                        .state
+                                        .snapshot
+                                        ?.connection['bench']?['maxframes']
+                                        ?.toString() ??
+                                    '',
+                              ) ??
+                              8000,
                           onUpload: widget.state.uploadProfile,
                         ),
                         _history(),
@@ -116,6 +152,8 @@ class _AthenaShellState extends State<AthenaShell> {
 
   Widget _topBar() {
     final connected = widget.state.snapshot?.connectionState == 'CONNECTED';
+    final reconnecting =
+        widget.state.snapshot?.connectionState == 'RECONNECTING';
     return Container(
       height: 56,
       color: const Color(0xFF111111),
@@ -145,7 +183,11 @@ class _AthenaShellState extends State<AthenaShell> {
             _chip('CHECK MESSAGE', Palette.critical)
           else
             _chip(
-              connected ? 'BENCH CONNECTED' : 'BENCH DISCONNECTED',
+              connected
+                  ? 'BENCH CONNECTED'
+                  : reconnecting
+                  ? 'RECONNECTING'
+                  : 'BENCH DISCONNECTED',
               connected ? Palette.good : Palette.muted,
             ),
         ],
@@ -158,7 +200,10 @@ class _AthenaShellState extends State<AthenaShell> {
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: TextButton(
-        onPressed: () => setState(() => page = item),
+        onPressed: () {
+          setState(() => page = item);
+          if (item == AthenaPage.history) widget.state.loadHistory();
+        },
         style: TextButton.styleFrom(
           foregroundColor: selected ? Colors.white : const Color(0xFFBBBBBB),
           backgroundColor: selected ? const Color(0xFF2A2A2A) : null,
@@ -241,17 +286,29 @@ class _AthenaShellState extends State<AthenaShell> {
     final status = snapshot?.benchState;
     final counters = snapshot?.counters;
     final connected = snapshot?.connectionState == 'CONNECTED';
+    final reconnecting = snapshot?.connectionState == 'RECONNECTING';
     final runSeconds = int.tryParse(counters?['run_s']?.toString() ?? '');
+    final frame = int.tryParse(status?['frame']?.toString() ?? '');
+    final frames = int.tryParse(status?['frames']?.toString() ?? '');
+    final progress = frame == null || frames == null || frames == 0
+        ? null
+        : (100 * frame / frames).clamp(0, 100);
     final tiles = [
       _tile(
         'Run state',
         connected
             ? (status?['state']?.toString() ?? 'Unknown')
+            : reconnecting
+            ? 'Reconnecting'
             : 'Disconnected',
         connected
-            ? (snapshot?.connection['transport'] == 'SIMULATOR'
-                  ? 'Local simulator'
-                  : 'USB bench')
+            ? switch (snapshot?.connection['transport']) {
+                'SIMULATOR' => 'Local simulator',
+                'WIFI' => 'Wi-Fi bench',
+                _ => 'USB bench',
+              }
+            : reconnecting
+            ? 'Waiting for TCP bench'
             : 'Connect in Settings',
       ),
       _tile(
@@ -261,8 +318,10 @@ class _AthenaShellState extends State<AthenaShell> {
       ),
       _tile(
         'Current cycle',
-        status?['cycle']?.toString() ?? '—',
-        'Current run',
+        progress == null ? '—' : '${progress.toStringAsFixed(0)}%',
+        frames == null || frames == 0
+            ? 'No profile loaded'
+            : 'Frame ${frame ?? 0}/$frames · cycle ${status?['cycle'] ?? '0'} of ${status?['target'] ?? '—'}',
       ),
       _tile(
         'Total bench hours',
@@ -320,6 +379,12 @@ class _AthenaShellState extends State<AthenaShell> {
     final snapshot = widget.state.snapshot;
     final live = snapshot?.benchState?['us']?.toString().split(',') ?? [];
     final active = snapshot?.counters?['active_s']?.toString().split(',') ?? [];
+    final runSeconds = int.tryParse(
+      snapshot?.counters?['run_s']?.toString() ?? '',
+    );
+    final sharedHours = runSeconds == null
+        ? '—'
+        : (runSeconds / 3600).toStringAsFixed(3);
     return BenchCard(
       title: 'Channels',
       child: Column(
@@ -330,6 +395,7 @@ class _AthenaShellState extends State<AthenaShell> {
               Expanded(child: HeaderLabel('NAME')),
               SizedBox(width: 76, child: HeaderLabel('LIVE µs')),
               SizedBox(width: 72, child: HeaderLabel('IDLE µs')),
+              SizedBox(width: 66, child: HeaderLabel('BENCH h')),
               SizedBox(width: 66, child: HeaderLabel('ACTIVE h')),
             ],
           ),
@@ -350,6 +416,7 @@ class _AthenaShellState extends State<AthenaShell> {
                     ),
                     SizedBox(width: 76, child: Text(live[i])),
                     const SizedBox(width: 72, child: Text('1500')),
+                    SizedBox(width: 66, child: Text(sharedHours)),
                     SizedBox(
                       width: 66,
                       child: Text(
@@ -362,6 +429,13 @@ class _AthenaShellState extends State<AthenaShell> {
                   ],
                 ),
               ),
+          if (live.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Bench hours are shared RUNNING time; active hours count only pulses more than 25 µs from idle.',
+              style: TextStyle(color: Palette.muted, fontSize: 11),
+            ),
+          ],
         ],
       ),
     );
@@ -377,16 +451,39 @@ class _AthenaShellState extends State<AthenaShell> {
             Wrap(
               spacing: 10,
               runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                SizedBox(
+                  width: 115,
+                  child: TextField(
+                    controller: cycleTarget,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Cycle target',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
                 FilledButton(
                   onPressed:
                       widget.state.loading ||
                           widget.state.snapshot?.profile == null ||
                           widget.state.snapshot?.benchState?['state'] !=
-                              'STOPPED'
+                              'STOPPED' ||
+                          int.tryParse(cycleTarget.text) == null ||
+                          int.parse(cycleTarget.text) < 1 ||
+                          int.parse(cycleTarget.text) > 100000
                       ? null
-                      : () => widget.state.control('start', cycles: 1),
-                  child: const Text('▶ Start 1 cycle'),
+                      : () => widget.state.control(
+                          'start',
+                          cycles: int.parse(cycleTarget.text),
+                        ),
+                  child: Text(
+                    '▶ Start ${cycleTarget.text} '
+                    '${cycleTarget.text.trim() == '1' ? 'cycle' : 'cycles'}',
+                  ),
                 ),
                 OutlinedButton(
                   onPressed:
@@ -427,12 +524,7 @@ class _AthenaShellState extends State<AthenaShell> {
       const SizedBox(height: 18),
       BenchCard(
         title: 'Live traces · this cycle',
-        child: SizedBox(
-          height: 230,
-          child: Center(
-            child: _empty('No commanded PWM trace is available yet.'),
-          ),
-        ),
+        child: LiveTrace(samples: widget.state.snapshot?.trace ?? const []),
       ),
     ],
   );
@@ -441,22 +533,121 @@ class _AthenaShellState extends State<AthenaShell> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       BenchCard(
-        title: 'Range',
-        child: _empty(
-          'Date filtering becomes available with recorded sessions.',
+        title: 'Recorded bench history · UTC dates',
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 150,
+              child: TextField(
+                controller: historyFrom,
+                decoration: const InputDecoration(
+                  labelText: 'From YYYY-MM-DD',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 160,
+              child: TextField(
+                controller: historyThrough,
+                decoration: const InputDecoration(
+                  labelText: 'Through YYYY-MM-DD',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            FilledButton.tonal(
+              onPressed: widget.state.historyLoading
+                  ? null
+                  : () => widget.state.loadHistory(
+                      fromDate: historyFrom.text.trim(),
+                      throughDate: historyThrough.text.trim(),
+                    ),
+              child: const Text('Apply range'),
+            ),
+            OutlinedButton(
+              onPressed: widget.state.historyLoading
+                  ? null
+                  : () => widget.state.loadHistory(),
+              child: const Text('Refresh'),
+            ),
+          ],
         ),
+      ),
+      if (widget.state.historyError != null) ...[
+        const SizedBox(height: 12),
+        _banner(widget.state.historyError!),
+      ],
+      const SizedBox(height: 18),
+      BenchCard(
+        title: 'Sessions',
+        child: widget.state.historySessions.isEmpty
+            ? _empty('No sessions recorded yet.')
+            : Column(
+                children: [
+                  for (final session in widget.state.historySessions)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(_localTime(session['started_at'])),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(session['status']?.toString() ?? '—'),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${(session['delta'] as Map?)?['cycles'] ?? '—'} cycles',
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${(session['delta'] as Map?)?['run_s'] ?? '—'} s running',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
       ),
       const SizedBox(height: 18),
       BenchCard(
-        title: 'Active hours per channel',
-        child: _empty('No counter observations recorded.'),
+        title: 'Events',
+        child: widget.state.historyEvents.isEmpty
+            ? _empty('No events recorded yet.')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final event in widget.state.historyEvents.take(30))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '${_localTime(event['received_at'])}  ·  ${event['kind']}',
+                      ),
+                    ),
+                ],
+              ),
       ),
-      const SizedBox(height: 18),
-      BenchCard(title: 'Sessions', child: _empty('No sessions recorded.')),
-      const SizedBox(height: 18),
-      BenchCard(title: 'Events', child: _empty('No events recorded.')),
     ],
   );
+
+  String _localTime(Object? value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (parsed == null) return '—';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${parsed.day}/${parsed.month} ${two(parsed.hour)}:${two(parsed.minute)}:${two(parsed.second)}';
+  }
 
   Widget _settings() => BenchCard(
     title: 'Bench connection',
@@ -515,10 +706,160 @@ class _AthenaShellState extends State<AthenaShell> {
               : widget.state.connectSimulator,
           child: const Text('Connect local simulator'),
         ),
+        const SizedBox(height: 16),
+        const Text(
+          'Venue bench over Wi-Fi (WDR TCP)',
+          style: TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 230,
+              child: TextField(
+                controller: wifiHost,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Bench IP or hostname',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 100,
+              child: TextField(
+                controller: wifiPort,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'TCP port',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            FilledButton.tonal(
+              onPressed: widget.state.loading || wifiHost.text.trim().isEmpty
+                  ? null
+                  : () => widget.state.connectTcp(
+                      wifiHost.text.trim(),
+                      int.tryParse(wifiPort.text.trim()) ?? 3333,
+                    ),
+              child: const Text('Connect Wi-Fi bench'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         Text(
           'Bench: ${widget.state.snapshot?.connection['bench'] ?? 'not connected'}',
           style: const TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Time sync: ${widget.state.snapshot?.timeSync?['status'] ?? 'not acknowledged'}'
+          '${widget.state.snapshot?.timeSync?['at'] == null ? '' : ' at ${widget.state.snapshot!.timeSync!['at']} UTC'}',
+          style: const TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed:
+              widget.state.loading ||
+                  widget.state.snapshot?.connectionState != 'CONNECTED'
+              ? null
+              : widget.state.syncTime,
+          child: const Text('Sync time again'),
+        ),
+        if (widget.state.snapshot?.simulatorResetAllowed == true) ...[
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed:
+                widget.state.loading ||
+                    widget.state.snapshot?.benchState?['state'] != 'STOPPED'
+                ? null
+                : () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text('Reset simulator counters?'),
+                        content: const Text(
+                          'The simulator lifetime totals will become zero. '
+                          'Athena keeps previously recorded history. Physical bench counters are never reset here.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('Reset simulator'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await widget.state.clearSimulatorCounters();
+                    }
+                  },
+            child: const Text('Reset simulator counters'),
+          ),
+        ],
+        const SizedBox(height: 16),
+        const Text(
+          'Manual pulse · only while STOPPED',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 100,
+              child: TextField(
+                controller: manualChannel,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'OUT index',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 120,
+              child: TextField(
+                controller: manualWidth,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Width µs',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            OutlinedButton(
+              onPressed:
+                  widget.state.loading ||
+                      widget.state.snapshot?.benchState?['state'] !=
+                          'STOPPED' ||
+                      int.tryParse(manualChannel.text) == null ||
+                      int.tryParse(manualWidth.text) == null
+                  ? null
+                  : () => widget.state.setPulse(
+                      int.parse(manualChannel.text),
+                      int.parse(manualWidth.text),
+                    ),
+              child: const Text('Apply pulse'),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         const Text(

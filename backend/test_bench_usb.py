@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from backend.bench_usb import BenchError, UsbBench
+from backend.bench_usb import BenchError, TcpBench, UsbBench
 
 
 class FakeSerial:
@@ -12,6 +12,9 @@ class FakeSerial:
         self.is_open = True
         self.pending = bytearray()
         self.commands: list[str] = []
+        self.status_state = "STOPPED"
+        self.cleared = False
+        self.team = "WDR_REFERENCE"
 
     def write(self, data: bytes) -> None:
         command = data.decode("ascii").strip()
@@ -19,11 +22,17 @@ class FakeSerial:
         if command == "PING":
             response = b"boot noise \xff OK PONG\n"
         elif command == "INFO":
-            response = b"OK INFO proto=1 team=WDR_REFERENCE ch=4 maxframes=8000 up=100\n"
+            response = f"OK INFO proto=1 team={self.team} ch=4 maxframes=8000 up=100\n".encode()
         elif command == "STATUS":
-            response = b"OK STATUS state=STOPPED cycle=0 target=0 frame=0 frames=2 us=1500,1500,1500,1500\n"
+            response = (f"OK STATUS state={self.status_state} cycle=0 target=0 frame=0 "
+                        "frames=2 us=1500,1500,1500,1500\n").encode()
         elif command == "COUNTERS":
-            response = b"OK COUNTERS cycles=21 run_s=24 active_s=23,23,23,6\n"
+            response = (b"OK COUNTERS cycles=0 run_s=0 active_s=0,0,0,0\n"
+                        if self.cleared else
+                        b"OK COUNTERS cycles=21 run_s=24 active_s=23,23,23,6\n")
+        elif command == "CLEAR":
+            self.cleared = True
+            response = b"OK\n"
         elif command == "START 1":
             response = b"OK\nEVT CYCLE 1\nEVT DONE\n"
         elif command == "COMMIT":
@@ -76,6 +85,36 @@ class UsbBenchTests(unittest.TestCase):
                                   "frames": [[1500] * 4]}, 1)
         self.assertEqual(device.profile_id, "existing")
         self.assertNotIn("LOAD 50 1", transport.commands)
+
+    def test_manual_set_requires_stopped_and_time_sync_is_acknowledged(self) -> None:
+        device = UsbBench()
+        transport = FakeSerial()
+        device._serial = transport
+        device.port = "fake"
+        device.refresh()
+        device.set_pulse(2, 1700)
+        self.assertIn("SET 2 1700", transport.commands)
+        device.sync_time()
+        self.assertEqual(device.snapshot()["time_sync"]["status"], "ACKNOWLEDGED")
+        self.assertTrue(any(command.startswith("TIME ") for command in transport.commands))
+        transport.status_state = "RUNNING"
+        with self.assertRaisesRegex(BenchError, "stopped"):
+            device.set_pulse(2, 1700)
+
+    def test_counter_reset_is_simulator_only(self) -> None:
+        device = UsbBench()
+        transport = FakeSerial()
+        device._serial = transport
+        device.port = "fake"
+        with self.assertRaisesRegex(BenchError, "physical benches"):
+            device.clear_simulator_counters()
+        self.assertNotIn("CLEAR", transport.commands)
+        simulator = TcpBench(expected_team="SIM")
+        transport.team = "SIM"
+        simulator._serial = transport
+        simulator.port = "127.0.0.1:3333"
+        self.assertEqual(simulator.clear_simulator_counters()["counters"]["cycles"], "0")
+        self.assertIn("CLEAR", transport.commands)
 
 
 if __name__ == "__main__":

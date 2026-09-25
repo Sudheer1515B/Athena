@@ -6,8 +6,10 @@ import os
 import sqlite3
 import hashlib
 import json
+import threading
+import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from .profiles import MAX_SOURCE_BYTES, ProfileIssue, compile_profile, inspect_csv
 from .bench_usb import BenchError, TcpBench, UsbBench
+from .history import HistoryRecorder
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,6 +36,10 @@ async def lifespan(app: FastAPI):
     app.state.database = open_database(DATA_DIR / "athena.sqlite3")
     app.state.instance_id = str(uuid4())
     app.state.bench = UsbBench()
+    app.state.history = HistoryRecorder(app.state.database)
+    app.state.desired_tcp = None
+    app.state.reconnect_after = 0.0
+    app.state.reconnect_lock = threading.RLock()
     try:
         yield
     finally:
@@ -70,8 +77,18 @@ class SimulatorConnectRequest(BaseModel):
     port: int = Field(default=3333, ge=1, le=65535)
 
 
+class TcpConnectRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(default=3333, ge=1, le=65535)
+
+
 class StartRequest(BaseModel):
     cycles: int = Field(ge=1, le=100000)
+
+
+class SetPulseRequest(BaseModel):
+    channel: int = Field(ge=0, le=15)
+    width_us: int = Field(ge=500, le=2500)
 
 
 def bench_error(error: Exception) -> HTTPException:
@@ -123,7 +140,10 @@ def profile_response(row: sqlite3.Row) -> dict:
 def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
     bench = getattr(app.state, "bench", None)
     live = bench.snapshot() if bench is not None else {}
-    return {
+    recorder = getattr(app.state, "history", None)
+    if recorder is not None and recorder.database is connection:
+        recorder.observe(live)
+    result = {
         "api_version": 1,
         "server_instance_id": instance_id,
         "observed_at": utc_now(),
@@ -134,8 +154,15 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "counters": live.get("counters"),
         "operation": None,
         "recent_events": live.get("recent_events", []),
+        "trace": live.get("trace", []),
+        "time_sync": live.get("time_sync"),
+        "simulator_reset_allowed": live.get("simulator_reset_allowed", False),
         "history_counts": database_summary(connection),
     }
+    if getattr(app.state, "desired_tcp", None) is not None and \
+            result["connection"]["state"] == "DISCONNECTED":
+        result["connection"]["state"] = "RECONNECTING"
+    return result
 
 
 @app.get("/api/v1/health")
@@ -157,13 +184,30 @@ def snapshot() -> dict:
         try:
             bench.refresh()
         except BenchError as error:
-            raise HTTPException(status_code=503, detail=f"USB bench did not respond: {error}") from error
+            if getattr(app.state, "desired_tcp", None) is None:
+                raise HTTPException(status_code=503, detail=f"Bench did not respond: {error}") from error
+            bench.disconnect()
+            app.state.reconnect_after = time.monotonic() + 3
+    desired = getattr(app.state, "desired_tcp", None)
+    if desired is not None and not app.state.bench.connected and \
+            time.monotonic() >= app.state.reconnect_after:
+        with app.state.reconnect_lock:
+            if not app.state.bench.connected and time.monotonic() >= app.state.reconnect_after:
+                host, port, expected_team = desired
+                replacement = TcpBench(expected_team=expected_team)
+                try:
+                    replacement.connect(host, port)
+                    app.state.bench = replacement
+                    app.state.reconnect_after = 0.0
+                except (BenchError, OSError, ValueError):
+                    app.state.reconnect_after = time.monotonic() + 3
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
 @app.post("/api/v1/bench/usb/connect")
 def connect_usb(request: UsbConnectRequest) -> dict:
     try:
+        app.state.desired_tcp = None
         app.state.bench.disconnect()
         app.state.bench = UsbBench()
         app.state.bench.connect(request.port)
@@ -175,9 +219,24 @@ def connect_usb(request: UsbConnectRequest) -> dict:
 @app.post("/api/v1/bench/simulator/connect")
 def connect_simulator(request: SimulatorConnectRequest) -> dict:
     try:
+        app.state.desired_tcp = None
         app.state.bench.disconnect()
         app.state.bench = TcpBench()
         app.state.bench.connect("127.0.0.1", request.port)
+        app.state.desired_tcp = ("127.0.0.1", request.port, "SIM")
+    except (BenchError, OSError, ValueError) as error:
+        raise bench_error(error) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/tcp/connect")
+def connect_tcp(request: TcpConnectRequest) -> dict:
+    try:
+        app.state.desired_tcp = None
+        app.state.bench.disconnect()
+        app.state.bench = TcpBench(expected_team=None)
+        app.state.bench.connect(request.host.strip(), request.port)
+        app.state.desired_tcp = (request.host.strip(), request.port, None)
     except (BenchError, OSError, ValueError) as error:
         raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
@@ -185,6 +244,7 @@ def connect_simulator(request: SimulatorConnectRequest) -> dict:
 
 @app.post("/api/v1/bench/usb/disconnect")
 def disconnect_usb() -> dict:
+    app.state.desired_tcp = None
     app.state.bench.disconnect()
     return current_snapshot(app.state.database, app.state.instance_id)
 
@@ -202,6 +262,7 @@ def upload_to_bench(profile_id: str) -> dict:
         app.state.bench.upload(profile_id, canonical, row["sum16"])
     except (BenchError, OSError) as error:
         raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="profile_uploaded")
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
@@ -211,6 +272,38 @@ def start_bench(request: StartRequest) -> dict:
         app.state.bench.control("start", request.cycles)
     except BenchError as error:
         raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="start",
+                              target_cycles=request.cycles)
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/set")
+def set_pulse(request: SetPulseRequest) -> dict:
+    try:
+        app.state.bench.set_pulse(request.channel, request.width_us)
+    except BenchError as error:
+        raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="set_pulse")
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/time-sync")
+def time_sync() -> dict:
+    try:
+        app.state.bench.sync_time()
+    except BenchError as error:
+        raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="time_sync")
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/simulator/clear-counters")
+def clear_simulator_counters() -> dict:
+    try:
+        app.state.bench.clear_simulator_counters()
+    except BenchError as error:
+        raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="simulator_counters_cleared")
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
@@ -222,7 +315,37 @@ def control_bench(action: str) -> dict:
         app.state.bench.control(action)
     except BenchError as error:
         raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action=action)
     return current_snapshot(app.state.database, app.state.instance_id)
+
+
+def history_bounds(from_date: str | None, through_date: str | None) -> tuple[str | None, str | None]:
+    try:
+        start = date.fromisoformat(from_date) if from_date else None
+        through = date.fromisoformat(through_date) if through_date else None
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="Use YYYY-MM-DD for history dates") from error
+    if start is not None and through is not None and start > through:
+        raise HTTPException(status_code=422, detail="History start date is after end date")
+    first = datetime.combine(start, datetime.min.time(), timezone.utc).isoformat(timespec="milliseconds") if start else None
+    end = datetime.combine(through + timedelta(days=1), datetime.min.time(), timezone.utc).isoformat(timespec="milliseconds") if through else None
+    return first, end
+
+
+@app.get("/api/v1/history/sessions")
+def history_sessions(limit: int = Query(50, ge=1, le=100),
+                     from_date: str | None = None,
+                     through_date: str | None = None) -> dict:
+    start, end = history_bounds(from_date, through_date)
+    return {"items": app.state.history.sessions(limit, start_at=start, end_at=end)}
+
+
+@app.get("/api/v1/history/events")
+def history_events(limit: int = Query(100, ge=1, le=200),
+                   from_date: str | None = None,
+                   through_date: str | None = None) -> dict:
+    start, end = history_bounds(from_date, through_date)
+    return {"items": app.state.history.events(limit, start_at=start, end_at=end)}
 
 
 @app.post("/api/v1/sources", status_code=201)

@@ -1,12 +1,12 @@
 # Athena — Implementation Log
 
-**Last updated:** 25 September 2026 (Asia/Kolkata).
+**Last updated:** 26 September 2026 (Asia/Kolkata).
 
 This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Record actual work and verification here; planned features are not completed features. Preserve prior entries and append corrections/new evidence rather than rewriting history to look successful.
 
 ## Current status
 
-**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB and local-simulator adapters can upload a profile and run finite cycles. The supplied simulator completed one full Athena API replay; finish the browser demo and remaining recovery/history work before marking later milestones complete.
+**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB, local-simulator and generic WDR TCP adapters can upload profiles and run finite cycles. A full 60-second Athena API replay completed against the supplied simulator, including sampled pulse traces and durable session/counter records. Venue Wi-Fi hardware remains untested.
 
 **Artifact review and official-tool baseline: COMPLETE.** The official simulator is available. No replacement simulator is needed. The original tool conformance runs passed, and Athena now connects to its real TCP service.
 
@@ -17,11 +17,11 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
 | M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
 | M2 | CSV importer and deterministic compiler | Complete | Golden case and API persistence/export pass; Flutter analyze/tests/build pass |
-| M3 | WDR adapter, uploads and operations | In progress | USB and loopback TCP simulator adapters, upload/checksum and finite controls work; final Wi-Fi transport remains |
-| M4 | First browser-to-simulator workflow | In progress | Full 40–44 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
-| M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop and live bench counters exist; recovery and durable accounting remain |
-| M6 | History/filtering/charts/CSV | Not started | SQLite stores source/profile records; run history and reports remain |
-| M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and simulator demo runbook exist; report/estimate and final polish remain |
+| M3 | WDR adapter, uploads and operations | In progress | USB, simulator TCP and configurable WDR TCP paths, checksum upload, finite controls and TIME ack work; venue Wi-Fi not tested |
+| M4 | First browser-to-simulator workflow | In progress | Full 40–100 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
+| M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop, manual SET, live counters, durable sessions and uncertain disconnect state exist; recovery edge cases remain |
+| M6 | History/filtering/charts/CSV | In progress | SQLite sessions/events/counter snapshots, UTC date filters and live sampled trace exist; history CSV export remains |
+| M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and 60-second simulator demo runbook exist; report/estimate and final polish remain |
 | M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; compiled-profile replay on real bench remains intentionally unperformed |
 
 ## Entry 001 — 25 September 2026 — Inspection and planning only
@@ -273,6 +273,18 @@ The simulator proves protocol and app integration, not electrical output or actu
 - The Flutter app opened a WebSocket that received only one initial snapshot; the backend then waited for client text while the dashboard separately polled `/api/v1/snapshot` every second. When the idle socket closed, the UI showed “Live updates disconnected. Reconnecting…” even though snapshot polling could still be healthy.
 - Removed the redundant WebSocket connection from Flutter state. The existing one-second HTTP snapshot polling remains the live dashboard source, including simulator state and counters. A transient polling error now clears after the next successful snapshot.
 - `flutter analyze`: no issues; `flutter test`: 2/2 pass; `flutter build web`: success. The backend WebSocket endpoint is unchanged. No ESP32, simulator, or saved profile was touched.
+
+## Entry 009 — 26 September 2026 — Six-hour finish slice: real flight segment, durable history, live trace
+
+- Added `SIX_HOUR_FINISH_PLAN.md` to prioritize backend reliability, authoritative accounting and the live dashboard under the remaining time. The competition brief calls for live pulse widths and trace preview; the sample dashboard also depicts a live graph. The graph is labeled as sampled command output, not mechanical or oscilloscope feedback.
+- Used the **unmodified** supplied `RCOU.csv` from 40–100 s at 50 frames/s. It deterministically compiles to **3,000 frames**, **60 seconds per cycle**, **SUM16 23174**. The Flutter sample preset selects this window; the earlier 4-second fixture remains available.
+- Added protocol-capability validation, configurable WDR TCP host/port for venue Wi-Fi, TCP_NODELAY, automatic acknowledged `TIME`, and stopped-only manual `SET`. The real bench was not contacted, uploaded to, cleared or reflashed.
+- Persisted bench-reported counter snapshots, counter epochs, sessions and events in SQLite. An unfinished session becomes UNCONFIRMED after link loss or backend restart; new observations reconcile it without sending START. Added session/event APIs with UTC date-range filtering.
+- Added up to 180 recent sampled `STATUS` pulse readings to snapshots and a Flutter live trace, finite-cycle target input, progress display, shared bench hours and per-output active hours, basic saved History view, and Wi-Fi host control. A 16-channel INFO can now size the profile mapping UI; physical 16-channel operation remains unverified.
+- Against the organizer's actual TCP simulator, Athena uploaded the 3,000-frame profile in approximately **0.11 s** on local loopback. A six-second partial run produced changing live pulses, seven trace samples and a durable manually stopped session. A full one-minute run completed with a **+1 cycle**, **+60 run_s**, **+32,+59,+56,+60 active_s** and 61 trace samples; the saved session was COMPLETED with matching deltas. Both used isolated temporary Athena data and did not touch either ESP32.
+- Backend suite: 16 tests passed after history, time-sync, manual-control, simulator-only reset and TCP reconnect additions. Flutter analysis: no issues; Flutter widget tests: 3 passed; Flutter web release build succeeded. A 1440×900 headless Chrome screenshot verified the built app's disconnected dashboard layout and the server's static/API routes. The connected live-graph browser walkthrough and venue Wi-Fi hardware test remain outstanding.
+- Added bounded automatic reconnection for a previously connected simulator/Wi-Fi TCP bench. It reads INFO/STATUS/COUNTERS/TIME only; it does not re-upload or send START. Explicit disconnect cancels retries. USB remains manual to avoid the observed reset-on-open behavior. The 4-second official-simulator API smoke test passed again after this change.
+- Added a confirmed simulator-only counter reset. The backend refuses CLEAR for USB and physical Wi-Fi benches, preserving the reference bench's pre-existing lifetime totals. The reset was exercised only against a fake transport in a unit test; no real or supplied-simulator counters were cleared during this entry.
 
 ## Future entry template
 

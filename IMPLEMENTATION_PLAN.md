@@ -1,6 +1,6 @@
 # Athena — Detailed Implementation Plan
 
-**Revision:** 1.2 · **Date:** 25 September 2026 · **Status:** M0–M2 complete; M3 next.
+**Revision:** 1.2 · **Date:** 25 September 2026 · **Status:** Detailed reference plan. For the current six-hour priorities and achieved work, see [SIX_HOUR_FINISH_PLAN.md](SIX_HOUR_FINISH_PLAN.md) and [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
 
 This is the current implementation specification for Welkinrim's Competition A PC controller. It replaces conflicting recommendations in the earlier research reports and chat plans. Use [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md) to record execution evidence and changes as implementation proceeds.
 
