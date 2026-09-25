@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><title>OLED screens and wiring — Replay Bench firmware</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f4f2;color:#0b0b0b;font:14px/1.4 "Segoe UI",Roboto,Helvetica,Arial,sans-serif;width:1440px;padding:24px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#52514e;font-weight:600;margin:0 0 12px}
+.card{background:#fff;border:1px solid #e3e2de;border-radius:10px;padding:16px 18px;margin-bottom:18px}
+.screens{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.oled{background:#000;border:6px solid #1c1c1c;border-radius:6px;width:100%;aspect-ratio:2/1;padding:10px 12px;color:#5cc8ff;font:bold 15px/1.35 Consolas,"Courier New",monospace;letter-spacing:.02em;display:flex;flex-direction:column;justify-content:space-between;image-rendering:pixelated}
+.oled .r{display:flex;justify-content:space-between;white-space:pre}
+.bar{height:9px;border:1.5px solid #5cc8ff;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:#5cc8ff}
+.cap{font-size:12.5px;color:#52514e;margin-top:8px}
+.cap b{color:#0b0b0b}
+.led{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.note{font-size:12.5px;color:#8a8985}
+</style></head><body>
+<div class="card"><h2>OLED status screens · 128 × 64 · one screen, four states</h2>
+<div class="screens">
+ <div><div class="oled"><div class="r"><span>WiFi ..</span><span>PC --</span></div><div class="r"><span>STOPPED</span><span>cyc 0</span></div><div class="bar"><i style="width:0%"></i></div><div class="r"><span>0%</span><span>0.0 h</span></div></div>
+  <div class="cap"><b>Boot / joining Wi-Fi.</b> No profile loaded yet. <span class="led" style="background:#2a78d6"></span>LED blue.</div></div>
+ <div><div class="oled"><div class="r"><span>192.168.4.23</span><span>PC --</span></div><div class="r"><span>STOPPED</span><span>cyc 126</span></div><div class="bar"><i style="width:0%"></i></div><div class="r"><span>0%</span><span>412.6 h</span></div></div>
+  <div class="cap"><b>Wi-Fi up, waiting for controller.</b> Counters restored from NVS after a power cut. <span class="led" style="background:#eda100"></span>LED yellow.</div></div>
+ <div><div class="oled"><div class="r"><span>192.168.4.23</span><span>PC OK &#9202;</span></div><div class="r"><span>RUN</span><span>cyc 127/500</span></div><div class="bar"><i style="width:63%"></i></div><div class="r"><span>63%  9:31</span><span>412.6 h</span></div></div>
+  <div class="cap"><b>Running.</b> Clock icon = time synced. Bar = percent of current cycle. <span class="led" style="background:#0ca30c"></span>LED green.</div></div>
+ <div><div class="oled"><div class="r"><span>192.168.4.23</span><span>PC -- &#9202;</span></div><div class="r"><span>PAUSED</span><span>cyc 127/500</span></div><div class="bar"><i style="width:63%"></i></div><div class="r"><span>63%  9:31</span><span>412.6 h</span></div></div>
+  <div class="cap"><b>Paused, controller link lost.</b> Bench keeps state; outputs hold last frame. <span class="led" style="background:#ffffff;border:1px solid #999"></span>LED white.</div></div>
+</div>
+<div class="note" style="margin-top:12px">Line 1: Wi-Fi state or IP, controller link, time-sync flag. Line 2: run state and cycle count. Line 3: progress bar. Line 4: percent and elapsed in cycle, total bench hours. Red blinking LED = fault (I2C error, flash full, bad profile).</div>
+</div>
+
+<div class="card"><h2>Bench wiring · fixed pin map for Competition B</h2>
+<svg width="1380" height="470" viewBox="0 0 1380 470" font-family="Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13">
+ <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#52514e"/></marker></defs>
+ <!-- ESP32 -->
+ <rect x="470" y="40" width="300" height="390" rx="10" fill="#fff" stroke="#0b0b0b" stroke-width="1.5"/>
+ <text x="620" y="68" text-anchor="middle" font-weight="700" font-size="15">ESP32-S3 DevKit (7semi, N16R8)</text>
+ <text x="620" y="86" text-anchor="middle" fill="#52514e">16 MB flash · 8 MB PSRAM · 3.3 V logic</text>
+ <g font-family="Consolas,monospace" font-size="12.5">
+  <text x="485" y="125">GPIO 8   I2C0 SDA</text><text x="485" y="143">GPIO 9   I2C0 SCL</text>
+  <text x="485" y="175">GPIO 4   OE (active low)</text>
+  <text x="485" y="215">GPIO 17  I2C1 SDA</text><text x="485" y="233">GPIO 18  I2C1 SCL</text>
+  <text x="485" y="275">GPIO 10..13  SPI2 (reserved SD)</text>
+  <text x="485" y="315">GPIO 5   START/STOP (reserved)</text><text x="485" y="333">GPIO 6   E-STOP (reserved)</text>
+  <text x="485" y="375">GPIO 48  RGB LED (on-board)</text>
+  <text x="485" y="410" fill="#52514e">Never: 0 3 45 46 · 19/20 · 26–37</text>
+ </g>
+ <!-- PCA9685 -->
+ <rect x="960" y="70" width="300" height="150" rx="10" fill="#fff" stroke="#c8302e" stroke-width="1.5"/>
+ <text x="1110" y="98" text-anchor="middle" font-weight="700" font-size="15">PCA9685 · 16-ch PWM</text>
+ <text x="1110" y="116" text-anchor="middle" fill="#52514e">I2C addr 0x40 · 12-bit · 24–1526 Hz</text>
+ <g font-family="Consolas,monospace" font-size="12.5"><text x="975" y="150">VCC 3V3 · GND · SDA · SCL · OE</text><text x="975" y="170">V+ screw terminal ← 5–6 V servo PSU</text><text x="975" y="190">OUT 0..15 → servos (S/V+/GND)</text></g>
+ <!-- OLED -->
+ <rect x="960" y="260" width="300" height="110" rx="10" fill="#fff" stroke="#0b0b0b" stroke-width="1.5"/>
+ <text x="1110" y="288" text-anchor="middle" font-weight="700" font-size="15">0.96" OLED · SSD1306</text>
+ <text x="1110" y="306" text-anchor="middle" fill="#52514e">I2C addr 0x3C · 128×64 · 4 pins</text>
+ <g font-family="Consolas,monospace" font-size="12.5"><text x="975" y="340">VCC 3V3 · GND · SCL · SDA</text></g>
+ <!-- Servo PSU -->
+ <rect x="960" y="400" width="300" height="50" rx="10" fill="#fff" stroke="#0b0b0b" stroke-dasharray="4 3"/>
+ <text x="1110" y="422" text-anchor="middle">5–6 V servo bench supply · common GND</text><text x="1110" y="440" text-anchor="middle" fill="#52514e">never powered from the ESP board</text>
+ <!-- PC / USB -->
+ <rect x="60" y="70" width="300" height="110" rx="10" fill="#fff" stroke="#0b0b0b" stroke-width="1.5"/>
+ <text x="210" y="98" text-anchor="middle" font-weight="700" font-size="15">Laptop</text>
+ <g font-size="12.5"><text x="75" y="125">USB "Native" port → flash + JTAG debug</text><text x="75" y="145">USB "for UART" port → serial log (115200)</text><text x="75" y="165">Wi-Fi → controller / conformance tester</text></g>
+ <rect x="60" y="260" width="300" height="90" rx="10" fill="#fff" stroke="#0b0b0b" stroke-dasharray="4 3"/>
+ <text x="210" y="288" text-anchor="middle" font-weight="700">Future (reserved, not in kit)</text>
+ <g font-size="12.5"><text x="75" y="312">micro-SD module on SPI2 (CS 10, MOSI 11, SCK 12, MISO 13)</text><text x="75" y="332">START/STOP button GPIO 5 · E-STOP switch GPIO 6</text></g>
+ <!-- wires -->
+ <g stroke="#52514e" stroke-width="1.8" fill="none" marker-end="url(#a)">
+  <path d="M770,134 L955,134"/>
+  <path d="M770,175 L900,175 L900,205 L955,205"/>
+  <path d="M770,224 L955,300"/>
+  <path d="M360,125 L465,125"/><path d="M360,145 L465,145"/>
+ </g>
+ <g fill="#52514e" font-size="12">
+  <text x="800" y="128">I2C0 · 400 kHz</text><text x="800" y="200">OE · 10 kΩ pull-up to 3V3</text><text x="800" y="275">I2C1 · 400 kHz</text>
+ </g>
+ <path d="M360,300 L465,300" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4 3" fill="none"/>
+ <path d="M1110,220 L1110,255" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4 3" fill="none"/>
+ <path d="M1110,370 L1110,395" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4 3" fill="none"/>
+</svg>
+<div class="note">Separate I2C controllers so a stalled display can never delay a servo frame. OE is pulled high at boot so no pulses appear until the firmware is ready.</div>
+</div>
+</body></html>
