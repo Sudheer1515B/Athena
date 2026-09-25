@@ -219,6 +219,16 @@ The user prioritized an immediate prototype and chose USB control before Wi-Fi. 
 - Wi-Fi can be addressed after this prototype. The supplied firmware is fixed to the event network and WDR v1 exposes no runtime SSID/password command. The Mac can join the board's network, or an access point can use the configured credentials, without changing firmware.
 
 ## Future entry template
+## Entry 006 — 25 September 2026 — Four physical PWM paths verified without profile loss
+
+- Both boards were powered from separate Mac USB ports, with four signal jumpers and one ground jumper; no servos were attached.
+- Read-only receiver output at bench idle showed OUT0–OUT3 around `1499–1500us/20000us`, with pulse counts increasing.
+- The proposed flight-profile upload was stopped before execution when the user asked what it would replace. A read-only `STATUS` confirmed the original 100-frame profile and all lifetime counters were still present.
+- With the user's explicit no-loss constraint, sent only `SET 0 1100`, `SET 1 1300`, `SET 2 1700`, `SET 3 1900`, then `STOP`. The independent receiver measured `1100,1297,1694,1891` µs respectively, each with a 20,000 µs period. After STOP, all live outputs were 1500 µs, profile length remained 100, and counters remained `cycles=21 run_s=24 active_s=23,23,23,6`.
+- Replaced an unexecuted upload-and-replay demo script with `pwm_receiver/check_pwm.py`, which performs only the reversible `SET`/`STOP` check with port-identity guards. No `LOAD`, `COMMIT`, `START`, `CLEAR`, or firmware flash occurred during this check.
+- A full log-profile replay would replace the bench's committed profile because WDR v1 has no readback command. It remains unperformed pending the user's decision about that loss.
+
+## Future entry template
 ## Entry 005 — 25 September 2026 — Independent PWM receiver programmed
 
 ### Device identification
