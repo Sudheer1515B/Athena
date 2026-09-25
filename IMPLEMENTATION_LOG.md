@@ -219,6 +219,26 @@ The user prioritized an immediate prototype and chose USB control before Wi-Fi. 
 - Wi-Fi can be addressed after this prototype. The supplied firmware is fixed to the event network and WDR v1 exposes no runtime SSID/password command. The Mac can join the board's network, or an access point can use the configured credentials, without changing firmware.
 
 ## Future entry template
+## Entry 005 — 25 September 2026 — Independent PWM receiver programmed
+
+### Device identification
+
+- The fixed WDR bench remains `/dev/cu.usbserial-0001`, CP2102 VID:PID `10c4:ea60`, USB serial `0001`. Athena previously received `team=WDR_REFERENCE` from this port. No esptool command or flash upload was directed to it.
+- The newly attached device is `/dev/cu.usbserial-10`, CH340 VID:PID `1a86:7523`. Espressif esptool queried **only this port** and reported `ESP32-D0WD-V3`, a classic ESP32, despite the initial description as an ESP32-S3. The user authorized programming the verified new device. Device identity and wiring are recorded in `pwm_receiver/README.md`.
+
+### Receiver firmware and verification
+
+- Added `pwm_receiver/pwm_receiver.ino`. It captures rising/falling edges on four GPIO inputs, reports each output's HIGH width, full period and pulse count every 250 ms at 115200 baud, and labels a channel `NO SIGNAL` after 100 ms without a pulse. It does not drive an output or communicate with the WDR bench.
+- Compiled with the installed Arduino ESP32 core 3.3.12 for `esp32:esp32:esp32`. The bundled Arduino ctags executable is x86-only on this Apple Silicon Mac, so the build used a temporary no-prototype ctags shim; this sketch defines all functions before use. The compiled image identified as classic ESP32.
+- The first upload to the receiver at 921600 baud failed before flash verification. Retrying the **same `/dev/cu.usbserial-10` device** at 115200 baud succeeded, with esptool hash verification. A small timestamp-label correction was recompiled and verified by a second upload.
+- Readback of the receiver's own serial output showed `t=9251ms | OUT0 NO SIGNAL | OUT1 NO SIGNAL | OUT2 NO SIGNAL | OUT3 NO SIGNAL`, as expected before connecting the signal wires. No physical PWM measurement has yet been made.
+- The observed classic ESP32 receiver uses inputs GPIO32, GPIO33, GPIO34 and GPIO35, not the previously suggested S3 GPIO4–7. On a classic ESP32, GPIO6/7 are flash pins and must not be connected as receiver inputs.
+
+### Next physical step
+
+With USB unplugged, wire bench OUT0 GPIO25 → receiver GPIO32, OUT1 GPIO26 → receiver GPIO33, OUT2 GPIO27 → receiver GPIO34, OUT3 GPIO33 → receiver GPIO35, and GND → GND. Reconnect both USB cables to the Mac. Do not join 3V3/5V rails or attach servos for the first signal-only check. Open `/dev/cu.usbserial-10` at 115200 in a terminal; keep Athena on `/dev/cu.usbserial-0001`. Verify idle near 1500 µs HIGH and ~20,000 µs period, then replay one finite profile cycle.
+
+## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:
 
