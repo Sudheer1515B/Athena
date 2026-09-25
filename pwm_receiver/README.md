@@ -47,4 +47,4 @@ The repeatable [check_pwm.py](check_pwm.py) script verifies the USB identities b
 .venv/bin/python -u pwm_receiver/check_pwm.py
 ```
 
-Uploading a new flight-log profile would discard the bench's existing committed profile, and WDR v1 has no profile-readback command. Do not upload until replacing that profile is explicitly acceptable.
+Uploading a new flight-log profile would discard the bench's existing committed profile. WDR v1 has no direct profile-readback command; however, on 26 September 2026 we reconstructed its commanded 100-frame width sequence through repeated finite replay and `STATUS` sampling. See [the capture record](../scripts/README.md). This is an approximation of the original upload because its metadata and exact rate cannot be read back. The physical bench's firmware and saved profile remain unchanged; its lifetime cycles advanced from 21 to 24 during the three capture replays.

@@ -1,0 +1,44 @@
+{
+  "candidate_import_rate_hz": 50,
+  "captured_at_utc": "2026-09-25T20:51:30.689+00:00",
+  "complete_width_sequence": true,
+  "conflicting_frame_indices": {},
+  "counter_after": {
+    "active_s": "29,29,29,12",
+    "cycles": "24",
+    "run_s": "30"
+  },
+  "counter_before": {
+    "active_s": "23,23,23,6",
+    "cycles": "21",
+    "run_s": "24"
+  },
+  "cycle_durations_s": [
+    2.0332277079869527,
+    2.0410240000055637,
+    2.037747166992631
+  ],
+  "error": null,
+  "estimated_rate_hz": 50.06,
+  "expected_frames": 100,
+  "host": "10.178.45.105",
+  "info_before": {
+    "ch": "4",
+    "maxframes": "8000",
+    "proto": "1",
+    "team": "WDR_REFERENCE",
+    "up": "2431"
+  },
+  "observed_frame_indices": 100,
+  "provenance_note": "Reconstructed from STATUS during finite replays. Pulse widths are bench-reported commands, not physical measurements. Original labels, source log, checksum and exact upload rate are unknown.",
+  "rate_estimation_method": "linear fit of reported frame index against STATUS receive time",
+  "reconstructed_sum16": 10176,
+  "status_after": {
+    "cycle": "1",
+    "frame": "0",
+    "frames": "100",
+    "state": "STOPPED",
+    "target": "1",
+    "us": "1500,1500,1500,1500"
+  }
+}

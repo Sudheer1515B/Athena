@@ -41,7 +41,7 @@ The two ESP32 boards can remain wired and powered. They are **not used** by the 
 .venv/bin/python -u pwm_receiver/check_pwm.py
 ```
 
-The receiver previously measured commanded widths `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. The script sends only reversible `SET`/`STOP` commands and confirms the real bench's original 100-frame profile and lifetime counters remain unchanged. See `pwm_receiver/README.md` for port identities and wiring.
+The receiver previously measured commanded widths `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. The script sends only reversible `SET`/`STOP` commands; at that earlier check it confirmed the 100-frame profile and counters were unchanged. A later capture replayed that saved profile three times without replacing it, so the bench's current lifetime counters are higher (`cycles=24 run_s=30 active_s=29,29,29,12`). See `pwm_receiver/README.md` for port identities and wiring.
 
 ## What is proven and what remains
 
