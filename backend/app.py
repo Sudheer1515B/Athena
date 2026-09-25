@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import csv
+import io
 import sqlite3
 import hashlib
 import json
@@ -346,6 +348,49 @@ def history_events(limit: int = Query(100, ge=1, le=200),
                    through_date: str | None = None) -> dict:
     start, end = history_bounds(from_date, through_date)
     return {"items": app.state.history.events(limit, start_at=start, end_at=end)}
+
+
+def _csv_cell(value: object) -> object:
+    """Keep exported labels/details inert when opened in a spreadsheet."""
+    if value is None:
+        return ""
+    result = str(value)
+    if result.lstrip().startswith(("=", "+", "-", "@")) or result.startswith(("\t", "\r", "\n")):
+        return "'" + result
+    return result
+
+
+@app.get("/api/v1/history/export.csv")
+def export_history(from_date: str | None = None,
+                   through_date: str | None = None) -> Response:
+    start, end = history_bounds(from_date, through_date)
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow([
+        "record_type", "timestamp_utc", "bench_label", "bench_id", "session_id",
+        "profile_id", "status_or_event", "target_cycles", "cycles_delta",
+        "run_seconds_delta", "active_seconds_delta_by_channel", "confidence", "details",
+    ])
+    for session in app.state.history.sessions(-1, start_at=start, end_at=end):
+        delta = session.get("delta") or {}
+        writer.writerow([_csv_cell(value) for value in [
+            "session", session["started_at"], session["bench_label"],
+            session["bench_id"], session["id"], session["profile_id"],
+            session["status"], session["target_cycles"], delta.get("cycles"),
+            delta.get("run_s"), json.dumps(delta.get("active_s")) if delta else None,
+            session["identity_confidence"],
+            f"ended_at_utc={session['ended_at'] or ''}",
+        ]])
+    for event in app.state.history.events(-1, start_at=start, end_at=end):
+        writer.writerow([_csv_cell(value) for value in [
+            "event", event["received_at"], "", event["bench_id"],
+            event["session_id"], "", event["kind"], "", "", "", "",
+            event["confidence"], json.dumps(event["details"], sort_keys=True),
+        ]])
+    return Response(
+        content=output.getvalue(), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="athena-history.csv"'},
+    )
 
 
 @app.post("/api/v1/sources", status_code=201)

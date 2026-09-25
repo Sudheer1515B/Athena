@@ -10,7 +10,7 @@ python3 -m venv .venv
 .venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8080
 ```
 
-The SQLite file is created at `var/athena.sqlite3`; source originals are stored under `var/sources/`. Set `ATHENA_DATA_DIR` to use a separate directory. API checks: `/api/v1/health`, `/api/v1/snapshot`, `/api/v1/sources`, `/api/v1/profiles`, `/api/v1/history/sessions`, and `/api/v1/history/events`. The dashboard samples `STATUS` over HTTP each second; the snapshot includes the most recent 180 reported pulse samples for its live graph. The older `/api/v1/live` WebSocket endpoint still provides an initial snapshot but is not used by Flutter.
+The SQLite file is created at `var/athena.sqlite3`; source originals are stored under `var/sources/`. Set `ATHENA_DATA_DIR` to use a separate directory. API checks: `/api/v1/health`, `/api/v1/snapshot`, `/api/v1/sources`, `/api/v1/profiles`, `/api/v1/history/sessions`, `/api/v1/history/events`, and `/api/v1/history/export.csv` (optional UTC `from_date`/`through_date`). The CSV includes all matching sessions and events, with duration deltas in seconds and per-channel active seconds as a JSON array. The dashboard samples `STATUS` over HTTP each second; the snapshot includes the most recent 180 reported pulse samples for its live graph. The older `/api/v1/live` WebSocket endpoint still provides an initial snapshot but is not used by Flutter.
 
 For the recommended software demo, run the supplied simulator in a second terminal:
 

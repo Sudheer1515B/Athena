@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import csv
+import io
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 from backend.history import HistoryRecorder
 from backend.app import history_bounds
+import backend.app as app_module
 from backend.storage import open_database
 
 
@@ -26,6 +31,34 @@ def bench_snapshot(*, state: str, cycle: int, cycles: int,
 
 
 class HistoryTests(unittest.TestCase):
+    def test_history_csv_exports_session_and_events_with_utc_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            old_data_dir = app_module.DATA_DIR
+            app_module.DATA_DIR = Path(directory)
+            try:
+                with TestClient(app_module.app) as client:
+                    recorder = app_module.app.state.history
+                    recorder.observe(bench_snapshot(state="STOPPED", cycle=0,
+                                                    cycles=0, run_s=0))
+                    recorder.observe(bench_snapshot(state="RUNNING", cycle=0,
+                                                    cycles=0, run_s=0),
+                                     action="start", target_cycles=1)
+                    recorder.observe(bench_snapshot(state="STOPPED", cycle=1,
+                                                    cycles=1, run_s=5))
+                    response = client.get("/api/v1/history/export.csv")
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertIn("attachment;", response.headers["content-disposition"])
+                    rows = list(csv.DictReader(io.StringIO(response.text)))
+                    session = next(row for row in rows if row["record_type"] == "session")
+                    self.assertEqual(session["cycles_delta"], "1")
+                    self.assertEqual(session["run_seconds_delta"], "5")
+                    self.assertEqual(session["active_seconds_delta_by_channel"], "[5, 5, 5, 5]")
+                    self.assertTrue(any(row["record_type"] == "event" for row in rows))
+                    empty = client.get("/api/v1/history/export.csv?from_date=2030-01-01")
+                    self.assertEqual(len(list(csv.DictReader(io.StringIO(empty.text)))), 0)
+            finally:
+                app_module.DATA_DIR = old_data_dir
+
     def test_disconnect_marks_open_session_uncertain_until_observed_again(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = open_database(Path(directory) / "db.sqlite3")

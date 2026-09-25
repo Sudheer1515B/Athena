@@ -29,7 +29,7 @@ If time slips, protect the verified import→upload→run→counter path first. 
 
 The backend now records durable sessions, events and bench counter snapshots, marks interrupted sessions uncertain, accepts configurable WDR TCP targets, acknowledges `TIME`, and exposes stopped-only manual `SET`. Flutter shows actual one-second STATUS samples in a live graph, a cycle target/progress, dynamically sized output mapping, and a dated history view. The official simulator completed the full 60-second profile with the expected checksum and one added cycle. Backend tests, Flutter analysis/tests, and the web build pass.
 
-Remaining highest-value work: a visual browser walkthrough on the built app; a real venue Wi-Fi connection test when its address/network are known; and correction of any defect found there. History CSV/PDF and richer reporting remain lower priority than a verified live hardware connection. The original physical bench's saved profile and counters remain untouched.
+The built app's connected live graph has now been visually checked during a full simulator replay, and a combined history CSV has been downloaded and verified. The remaining highest-value check is a real venue Wi-Fi connection once its address/network are known, followed by correction of any defect found there. The original physical bench's saved profile and counters remain untouched.
 
 ## Safety and truthfulness gates
 

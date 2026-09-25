@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'live_trace.dart';
@@ -575,6 +576,16 @@ class _AthenaShellState extends State<AthenaShell> {
                   ? null
                   : () => widget.state.loadHistory(),
               child: const Text('Refresh'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(
+                widget.state.api.historyExportUri(
+                  historyFrom.text.trim(),
+                  historyThrough.text.trim(),
+                ),
+              ),
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Export CSV'),
             ),
           ],
         ),

@@ -20,7 +20,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | M3 | WDR adapter, uploads and operations | In progress | USB, simulator TCP and configurable WDR TCP paths, checksum upload, finite controls and TIME ack work; venue Wi-Fi not tested |
 | M4 | First browser-to-simulator workflow | In progress | Full 40–100 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
 | M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop, manual SET, live counters, durable sessions and uncertain disconnect state exist; recovery edge cases remain |
-| M6 | History/filtering/charts/CSV | In progress | SQLite sessions/events/counter snapshots, UTC date filters and live sampled trace exist; history CSV export remains |
+| M6 | History/filtering/charts/CSV | In progress | SQLite sessions/events/counter snapshots, UTC date filters, live sampled trace and combined history CSV export pass simulator checks; fuller reporting remains |
 | M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and 60-second simulator demo runbook exist; report/estimate and final polish remain |
 | M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; compiled-profile replay on real bench remains intentionally unperformed |
 
@@ -285,6 +285,13 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Backend suite: 16 tests passed after history, time-sync, manual-control, simulator-only reset and TCP reconnect additions. Flutter analysis: no issues; Flutter widget tests: 3 passed; Flutter web release build succeeded. A 1440×900 headless Chrome screenshot verified the built app's disconnected dashboard layout and the server's static/API routes. The connected live-graph browser walkthrough and venue Wi-Fi hardware test remain outstanding.
 - Added bounded automatic reconnection for a previously connected simulator/Wi-Fi TCP bench. It reads INFO/STATUS/COUNTERS/TIME only; it does not re-upload or send START. Explicit disconnect cancels retries. USB remains manual to avoid the observed reset-on-open behavior. The 4-second official-simulator API smoke test passed again after this change.
 - Added a confirmed simulator-only counter reset. The backend refuses CLEAR for USB and physical Wi-Fi benches, preserving the reference bench's pre-existing lifetime totals. The reset was exercised only against a fake transport in a unit test; no real or supplied-simulator counters were cleared during this entry.
+
+## Entry 010 — 26 September 2026 — Browser replay and export check
+
+- Added a History **Export CSV** button and `/api/v1/history/export.csv`, applying the same inclusive UTC date-range filter as the list. Export contains all matching session and event records, labeled counter deltas in seconds, a JSON array of per-channel active seconds, confidence, and event details. User-provided text is escaped to avoid spreadsheet formula execution. A backend route test checks rows and filtering.
+- Visually inspected the built Flutter dashboard in headless Chrome while a 3,000-frame official-simulator replay was RUNNING. The 1440×900 capture showed bench connection, 23% current-cycle progress, four distinct live pulse widths, lifetime and per-channel hours, and a four-line sampled pulse graph. This is browser/rendering evidence, not physical PWM measurement.
+- The replay finished automatically; the saved session was COMPLETED with **+1 cycle, +60 running seconds, +32,+60,+56,+60 per-channel active seconds**. A real HTTP CSV download returned that session and four events. The one-second difference from the earlier OUT1 active delta reflects observation boundaries; bench counters remain the authority.
+- Backend suite: 17 tests passed. Flutter analysis: no issues; widget tests: 3 passed; web release build succeeded. All this work used a local simulator and isolated temporary Athena data. The physical USB reference bench and receiver were not contacted. Venue Wi-Fi remains unverified because its address/network are not yet available.
 
 ## Future entry template
 

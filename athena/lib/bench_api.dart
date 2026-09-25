@@ -209,6 +209,9 @@ class BenchApi {
         },
       );
 
+  Uri historyExportUri(String? fromDate, String? throughDate) =>
+      historyUri('history/export.csv', fromDate, throughDate);
+
   Future<List<Map<String, dynamic>>> historySessions(
     String? fromDate,
     String? throughDate,
