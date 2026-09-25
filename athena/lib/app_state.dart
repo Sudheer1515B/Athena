@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'bench_api.dart';
 
@@ -14,12 +12,11 @@ class AppState extends ChangeNotifier {
   BenchSnapshot? snapshot;
   String? error;
   bool loading = false;
-  WebSocketChannel? _live;
-  StreamSubscription<dynamic>? _subscription;
   Timer? _retry;
   Timer? _poll;
   bool _disposed = false;
   bool _refreshing = false;
+  bool _pollError = false;
 
   Future<void> connect() async {
     if (_disposed) return;
@@ -30,7 +27,6 @@ class AppState extends ChangeNotifier {
       snapshot = await _api.fetchSnapshot();
       error = null;
       notifyListeners();
-      _openLive();
       _poll ??= Timer.periodic(const Duration(seconds: 1), (_) => refresh());
     } catch (_) {
       error = 'Athena service is unavailable. Start the local backend.';
@@ -46,12 +42,14 @@ class AppState extends ChangeNotifier {
     _refreshing = true;
     try {
       snapshot = await _api.fetchSnapshot();
-      if (error?.startsWith('Athena service is unavailable') == true ||
-          error?.startsWith('USB bench did not respond') == true) {
+      if (_pollError ||
+          error?.startsWith('Athena service is unavailable') == true) {
         error = null;
       }
+      _pollError = false;
       if (!_disposed) notifyListeners();
     } catch (caught) {
+      _pollError = true;
       error = caught.toString().replaceFirst(
         RegExp(r'^(Bad state|Exception): '),
         '',
@@ -87,40 +85,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void _openLive() {
-    if (_disposed) return;
-    try {
-      _live = _api.openLive();
-      _subscription = _live!.stream.listen(
-        (message) {
-          try {
-            final data = jsonDecode(message.toString()) as Map<String, dynamic>;
-            if (data['type'] == 'snapshot' && data['payload'] is Map) {
-              snapshot = BenchSnapshot.fromJson(
-                Map<String, dynamic>.from(data['payload'] as Map),
-              );
-              error = null;
-              if (!_disposed) notifyListeners();
-            }
-          } catch (_) {
-            error = 'The live stream sent an invalid update.';
-            if (!_disposed) notifyListeners();
-          }
-        },
-        onError: (_) {
-          error = 'Live updates disconnected. Reconnecting…';
-          if (!_disposed) notifyListeners();
-          _scheduleRetry();
-        },
-        onDone: () {
-          if (!_disposed) _scheduleRetry();
-        },
-      );
-    } catch (_) {
-      _scheduleRetry();
-    }
-  }
-
   void _scheduleRetry() {
     if (_disposed || _retry?.isActive == true) return;
     _retry = Timer(const Duration(seconds: 3), connect);
@@ -131,8 +95,6 @@ class AppState extends ChangeNotifier {
     _disposed = true;
     _retry?.cancel();
     _poll?.cancel();
-    _subscription?.cancel();
-    _live?.sink.close();
     _api.close();
     super.dispose();
   }

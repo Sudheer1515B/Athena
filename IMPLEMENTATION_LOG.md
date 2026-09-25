@@ -268,6 +268,12 @@ The supplied `serve-sim` process already exposes WDR v1 over local TCP. It suppo
 
 The simulator proves protocol and app integration, not electrical output or actual servo wear. The earlier independent receiver check supplies the separate four-channel PWM evidence. Real Wi-Fi control, 16-channel hardware, durable per-run history and real-bench replay of this compiled profile remain outside this prototype slice. The original real-bench profile and counters were preserved.
 
+## Entry 008 — 26 September 2026 — Remove repeated live reconnect warning
+
+- The Flutter app opened a WebSocket that received only one initial snapshot; the backend then waited for client text while the dashboard separately polled `/api/v1/snapshot` every second. When the idle socket closed, the UI showed “Live updates disconnected. Reconnecting…” even though snapshot polling could still be healthy.
+- Removed the redundant WebSocket connection from Flutter state. The existing one-second HTTP snapshot polling remains the live dashboard source, including simulator state and counters. A transient polling error now clears after the next successful snapshot.
+- `flutter analyze`: no issues; `flutter test`: 2/2 pass; `flutter build web`: success. The backend WebSocket endpoint is unchanged. No ESP32, simulator, or saved profile was touched.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:
