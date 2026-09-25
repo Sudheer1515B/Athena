@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
+import 'history_page.dart';
 import 'live_trace.dart';
 import 'profile_page.dart';
 import 'theme.dart';
@@ -65,8 +65,6 @@ class _AthenaShellState extends State<AthenaShell> {
   final manualChannel = TextEditingController(text: '0');
   final manualWidth = TextEditingController(text: '1500');
   final cycleTarget = TextEditingController(text: '1');
-  final historyFrom = TextEditingController();
-  final historyThrough = TextEditingController();
 
   @override
   void dispose() {
@@ -76,8 +74,6 @@ class _AthenaShellState extends State<AthenaShell> {
     manualChannel.dispose();
     manualWidth.dispose();
     cycleTarget.dispose();
-    historyFrom.dispose();
-    historyThrough.dispose();
     super.dispose();
   }
 
@@ -137,7 +133,7 @@ class _AthenaShellState extends State<AthenaShell> {
                               8000,
                           onUpload: widget.state.uploadProfile,
                         ),
-                        _history(),
+                        HistoryPage(state: widget.state),
                         _settings(),
                       ],
                     ),
@@ -529,136 +525,6 @@ class _AthenaShellState extends State<AthenaShell> {
       ),
     ],
   );
-
-  Widget _history() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      BenchCard(
-        title: 'Recorded bench history · UTC dates',
-        child: Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 150,
-              child: TextField(
-                controller: historyFrom,
-                decoration: const InputDecoration(
-                  labelText: 'From YYYY-MM-DD',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 160,
-              child: TextField(
-                controller: historyThrough,
-                decoration: const InputDecoration(
-                  labelText: 'Through YYYY-MM-DD',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            FilledButton.tonal(
-              onPressed: widget.state.historyLoading
-                  ? null
-                  : () => widget.state.loadHistory(
-                      fromDate: historyFrom.text.trim(),
-                      throughDate: historyThrough.text.trim(),
-                    ),
-              child: const Text('Apply range'),
-            ),
-            OutlinedButton(
-              onPressed: widget.state.historyLoading
-                  ? null
-                  : () => widget.state.loadHistory(),
-              child: const Text('Refresh'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => launchUrl(
-                widget.state.api.historyExportUri(
-                  historyFrom.text.trim(),
-                  historyThrough.text.trim(),
-                ),
-              ),
-              icon: const Icon(Icons.download, size: 18),
-              label: const Text('Export CSV'),
-            ),
-          ],
-        ),
-      ),
-      if (widget.state.historyError != null) ...[
-        const SizedBox(height: 12),
-        _banner(widget.state.historyError!),
-      ],
-      const SizedBox(height: 18),
-      BenchCard(
-        title: 'Sessions',
-        child: widget.state.historySessions.isEmpty
-            ? _empty('No sessions recorded yet.')
-            : Column(
-                children: [
-                  for (final session in widget.state.historySessions)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Text(_localTime(session['started_at'])),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(session['status']?.toString() ?? '—'),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              '${(session['delta'] as Map?)?['cycles'] ?? '—'} cycles',
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              '${(session['delta'] as Map?)?['run_s'] ?? '—'} s running',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-      ),
-      const SizedBox(height: 18),
-      BenchCard(
-        title: 'Events',
-        child: widget.state.historyEvents.isEmpty
-            ? _empty('No events recorded yet.')
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final event in widget.state.historyEvents.take(30))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        '${_localTime(event['received_at'])}  ·  ${event['kind']}',
-                      ),
-                    ),
-                ],
-              ),
-      ),
-    ],
-  );
-
-  String _localTime(Object? value) {
-    final parsed = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
-    if (parsed == null) return '—';
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${parsed.day}/${parsed.month} ${two(parsed.hour)}:${two(parsed.minute)}:${two(parsed.second)}';
-  }
 
   Widget _settings() => BenchCard(
     title: 'Bench connection',

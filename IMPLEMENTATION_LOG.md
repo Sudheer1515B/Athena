@@ -6,7 +6,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 
 ## Current status
 
-**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB, local-simulator and generic WDR TCP adapters can upload profiles and run finite cycles. A full 60-second Athena API replay completed against the supplied simulator, including sampled pulse traces and durable session/counter records. Venue Wi-Fi hardware remains untested.
+**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB, local-simulator and generic WDR TCP adapters can upload profiles and run finite cycles. A full 60-second Athena API replay completed against the supplied simulator, including sampled pulse traces and durable session/counter records. The user reported an Athena Wi-Fi connection and TIME acknowledgement from the reference bench; replay of a new profile on that physical bench remains untested.
 
 **Artifact review and official-tool baseline: COMPLETE.** The official simulator is available. No replacement simulator is needed. The original tool conformance runs passed, and Athena now connects to its real TCP service.
 
@@ -17,12 +17,12 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
 | M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
 | M2 | CSV importer and deterministic compiler | Complete | Golden case and API persistence/export pass; Flutter analyze/tests/build pass |
-| M3 | WDR adapter, uploads and operations | In progress | USB, simulator TCP and configurable WDR TCP paths, checksum upload, finite controls and TIME ack work; venue Wi-Fi not tested |
+| M3 | WDR adapter, uploads and operations | In progress | USB and simulator TCP replay pass; user reports reference-bench Wi-Fi INFO/TIME connection check; physical Wi-Fi upload/replay not tested |
 | M4 | First browser-to-simulator workflow | In progress | Full 40–100 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
 | M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop, manual SET, live counters, durable sessions and uncertain disconnect state exist; recovery edge cases remain |
-| M6 | History/filtering/charts/CSV | In progress | SQLite sessions/events/counter snapshots, UTC date filters, live sampled trace and combined history CSV export pass simulator checks; fuller reporting remains |
+| M6 | History/filtering/charts/CSV | In progress | Sessions/events, UTC and channel filters, per-channel hours chart, expanded persisted details and CSV pass tests; browser visual review of populated History remains |
 | M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and 60-second simulator demo runbook exist; report/estimate and final polish remain |
-| M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; compiled-profile replay on real bench remains intentionally unperformed |
+| M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; user reports Wi-Fi INFO/TIME connection at 10.178.45.105:3333; compiled-profile replay on real bench remains intentionally unperformed |
 
 ## Entry 001 — 25 September 2026 — Inspection and planning only
 
@@ -292,6 +292,14 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Visually inspected the built Flutter dashboard in headless Chrome while a 3,000-frame official-simulator replay was RUNNING. The 1440×900 capture showed bench connection, 23% current-cycle progress, four distinct live pulse widths, lifetime and per-channel hours, and a four-line sampled pulse graph. This is browser/rendering evidence, not physical PWM measurement.
 - The replay finished automatically; the saved session was COMPLETED with **+1 cycle, +60 running seconds, +32,+60,+56,+60 per-channel active seconds**. A real HTTP CSV download returned that session and four events. The one-second difference from the earlier OUT1 active delta reflects observation boundaries; bench counters remain the authority.
 - Backend suite: 17 tests passed. Flutter analysis: no issues; widget tests: 3 passed; web release build succeeded. All this work used a local simulator and isolated temporary Athena data. The physical USB reference bench and receiver were not contacted. Venue Wi-Fi remains unverified because its address/network are not yet available.
+
+## Entry 011 — 26 September 2026 — Persisted History details and per-channel hours
+
+- Implemented a saved session-detail API exposing the persisted bench identity/capabilities, source/profile IDs and hashes, source window, per-output mapping and pulse limits, checksum, cycle target, observation receive-time bounds, recorded stop cause, individual lifetime counter observations, and associated session events. It excludes profile frame arrays from the detail response. A missing profile/source is shown as unknown rather than borrowed from the current dashboard.
+- A session with fewer than two saved counter observations now has an unknown delta instead of a misleading zero. Detail responses flag link loss and counter-epoch changes; the History UI warns that intermediate events are unknown during a disconnect even when later bench totals bracket the gap.
+- Replaced the minimal History rows with expandable session details, a per-channel active-hours chart summing known deltas for the loaded sessions, a channel selector that filters the chart/mappings/observations, and a structured events table. UTC date filtering and CSV download remain. The CSV now also carries source/profile provenance, stop cause, observation count and link-gap status, while retaining explicit seconds units and formula-safe text cells.
+- Backend suite: 19 tests passed, including saved-profile provenance, single-observation unknown delta, disconnect uncertainty, counter-epoch reset uncertainty, details/CSV, and date filtering. Flutter analysis and five widget tests pass, including chart values, detail expansion, channel filtering, and explicit unknown/uncertain displays after disconnect. The Flutter web release build succeeds. A separate isolated API replay using the **supplied simulator** compiled the unmodified 40–44 s `RCOU.csv` window (200 frames, SUM16 16982), completed one cycle, and returned a COMPLETED session with **+1 cycle, +4 run_s, +4 active_s on each output**, nine saved observations and five CSV rows. No physical device was contacted by this test.
+- The user separately confirmed Athena reached the reference bench over Wi-Fi at `10.178.45.105:3333` and received `proto=1`, `team=WDR_REFERENCE`, `ch=4`, `maxframes=8000`, plus a TIME acknowledgement. This is user-reported connection evidence only; no profile upload, START or counter CLEAR was performed. Physical Wi-Fi replay remains unverified.
 
 ## Future entry template
 

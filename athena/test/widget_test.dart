@@ -5,6 +5,146 @@ import 'package:athena/live_trace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class FakeHistoryApi extends BenchApi {
+  @override
+  Future<List<Map<String, dynamic>>> historySessions(
+    String? fromDate,
+    String? throughDate,
+  ) async => [
+    {
+      'id': 'completed',
+      'bench_label': 'SIM',
+      'channel_count': 2,
+      'started_at': '2026-09-26T00:00:00Z',
+      'status': 'COMPLETED',
+      'target_cycles': 1,
+      'observation_count': 3,
+      'has_link_gap': false,
+      'delta': {
+        'cycles': 1,
+        'run_s': 7200,
+        'active_s': [3600, 7200],
+      },
+    },
+    {
+      'id': 'uncertain',
+      'bench_label': 'SIM',
+      'channel_count': 2,
+      'started_at': '2026-09-25T00:00:00Z',
+      'status': 'UNCONFIRMED',
+      'target_cycles': 2,
+      'observation_count': 1,
+      'has_link_gap': true,
+      'delta': null,
+    },
+  ];
+
+  @override
+  Future<List<Map<String, dynamic>>> historyEvents(
+    String? fromDate,
+    String? throughDate,
+  ) async => [];
+
+  @override
+  Future<Map<String, dynamic>> historySession(String id) async =>
+      id == 'uncertain'
+      ? {
+          'id': id,
+          'status': 'UNCONFIRMED',
+          'started_at': '2026-09-25T00:00:00Z',
+          'ended_at': null,
+          'stop_cause': null,
+          'identity_confidence': 'uncertain',
+          'target_cycles': 2,
+          'delta': null,
+          'bench_label': 'SIM',
+          'bench_mode': 'simulator',
+          'bench_host': '127.0.0.1',
+          'bench_id': 'bench-1',
+          'bench_capabilities': null,
+          'source_name': null,
+          'profile_id': null,
+          'profile_settings': null,
+          'counter_observations': [
+            {
+              'observed_at': '2026-09-25T00:00:00Z',
+              'cycles': 0,
+              'run_s': 0,
+              'uptime_s': 10,
+              'active_s': [0, 0],
+            },
+          ],
+          'events': [],
+          'has_link_gap': true,
+          'counter_epoch_changed': false,
+        }
+      : {
+          'id': id,
+          'status': 'COMPLETED',
+          'started_at': '2026-09-26T00:00:00Z',
+          'ended_at': '2026-09-26T02:00:00Z',
+          'stop_cause': 'Cycle target reached',
+          'identity_confidence': 'observed',
+          'target_cycles': 1,
+          'delta': {
+            'cycles': 1,
+            'run_s': 7200,
+            'active_s': [3600, 7200],
+          },
+          'bench_label': 'SIM',
+          'bench_mode': 'simulator',
+          'bench_host': '127.0.0.1',
+          'bench_id': 'bench-1',
+          'bench_capabilities': {'proto': '1', 'ch': '2', 'maxframes': '8000'},
+          'source_name': 'flight.csv',
+          'source_sha256': 'source-hash',
+          'profile_id': 'profile-1',
+          'profile_sha256': 'profile-hash',
+          'profile_sum16': 12345,
+          'profile_frame_count': 100,
+          'profile_rate_hz': 50,
+          'profile_settings': {
+            'start_us': 0,
+            'end_us': 2000000,
+            'mapping': [
+              {
+                'output': 0,
+                'source': 'C1',
+                'label': 'A',
+                'min_us': 500,
+                'max_us': 2500,
+              },
+              {
+                'output': 1,
+                'source': 'C2',
+                'label': 'B',
+                'min_us': 500,
+                'max_us': 2500,
+              },
+            ],
+          },
+          'counter_observations': [
+            {
+              'observed_at': '2026-09-26T00:00:00Z',
+              'cycles': 0,
+              'run_s': 0,
+              'uptime_s': 10,
+              'active_s': [0, 0],
+            },
+            {
+              'observed_at': '2026-09-26T02:00:00Z',
+              'cycles': 1,
+              'run_s': 7200,
+              'uptime_s': 7210,
+              'active_s': [3600, 7200],
+            },
+          ],
+          'events': [],
+          'has_link_gap': false,
+          'counter_epoch_changed': false,
+        };
+}
+
 void main() {
   testWidgets(
     'empty dashboard shows disconnected state and disabled controls',
@@ -79,6 +219,72 @@ void main() {
     expect(find.text('OUT0'), findsOneWidget);
     expect(find.text('OUT3'), findsOneWidget);
     expect(find.textContaining('not physical feedback'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'history shows persisted hours, unknown deltas and filtered details',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final state = AppState(api: FakeHistoryApi());
+      addTearDown(state.dispose);
+      await tester.pumpWidget(MyApp(state: state));
+      await tester.tap(find.text('History'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Observed active hours by channel'.toUpperCase()),
+        findsOneWidget,
+      );
+      expect(find.text('1.0000 h'), findsOneWidget);
+      expect(find.text('2.0000 h'), findsOneWidget);
+      expect(
+        find.textContaining('1 unknown session deltas excluded'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('UNCONFIRMED'), findsOneWidget);
+
+      await tester.tap(find.textContaining('SIM ·').first);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Source file: flight.csv'), findsOneWidget);
+      expect(
+        find.textContaining('Profile SHA-256: profile-hash'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Counter observations · 2'), findsOneWidget);
+      expect(find.textContaining('OUT0 mapping:'), findsOneWidget);
+
+      await tester.tap(find.text('All channels'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OUT1').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('OUT1 mapping:'), findsOneWidget);
+      expect(find.textContaining('OUT0 mapping:'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('history flags disconnected sessions without inventing results', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = AppState(api: FakeHistoryApi());
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MyApp(state: state));
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+    final uncertain = find.textContaining('UNCONFIRMED');
+    await tester.ensureVisible(uncertain);
+    await tester.tap(uncertain);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Uncertain coverage:'), findsOneWidget);
+    expect(find.textContaining('Counter delta: Unknown'), findsOneWidget);
+    expect(find.textContaining('Source file: Unknown'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

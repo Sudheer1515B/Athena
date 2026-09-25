@@ -342,6 +342,14 @@ def history_sessions(limit: int = Query(50, ge=1, le=100),
     return {"items": app.state.history.sessions(limit, start_at=start, end_at=end)}
 
 
+@app.get("/api/v1/history/sessions/{session_id}")
+def history_session_detail(session_id: str) -> dict:
+    detail = app.state.history.session_detail(session_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return detail
+
+
 @app.get("/api/v1/history/events")
 def history_events(limit: int = Query(100, ge=1, le=200),
                    from_date: str | None = None,
@@ -370,6 +378,8 @@ def export_history(from_date: str | None = None,
         "record_type", "timestamp_utc", "bench_label", "bench_id", "session_id",
         "profile_id", "status_or_event", "target_cycles", "cycles_delta",
         "run_seconds_delta", "active_seconds_delta_by_channel", "confidence", "details",
+        "bench_mode", "source_name", "source_sha256", "profile_sha256",
+        "stop_cause", "counter_observation_count", "link_gap_observed",
     ])
     for session in app.state.history.sessions(-1, start_at=start, end_at=end):
         delta = session.get("delta") or {}
@@ -380,12 +390,16 @@ def export_history(from_date: str | None = None,
             delta.get("run_s"), json.dumps(delta.get("active_s")) if delta else None,
             session["identity_confidence"],
             f"ended_at_utc={session['ended_at'] or ''}",
+            session["bench_mode"], session["source_name"], session["source_sha256"],
+            session["profile_sha256"], session["stop_cause"],
+            session["observation_count"], session["has_link_gap"],
         ]])
     for event in app.state.history.events(-1, start_at=start, end_at=end):
         writer.writerow([_csv_cell(value) for value in [
             "event", event["received_at"], "", event["bench_id"],
             event["session_id"], "", event["kind"], "", "", "", "",
             event["confidence"], json.dumps(event["details"], sort_keys=True),
+            "", "", "", "", "", "", "",
         ]])
     return Response(
         content=output.getvalue(), media_type="text/csv; charset=utf-8",

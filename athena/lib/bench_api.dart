@@ -238,6 +238,9 @@ class BenchApi {
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
 
+  Future<Map<String, dynamic>> historySession(String id) async =>
+      _decodeObject(await _client.get(endpoint('history/sessions/$id')));
+
   Future<BenchSnapshot> disconnectBench() async => BenchSnapshot.fromJson(
     _decodeObject(await _client.post(endpoint('bench/disconnect'))),
   );
