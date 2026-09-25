@@ -1,6 +1,6 @@
 # Athena — Detailed Implementation Plan
 
-**Revision:** 1.1 · **Date:** 25 September 2026 · **Status:** M0–M1 complete; M2 next.
+**Revision:** 1.2 · **Date:** 25 September 2026 · **Status:** M0–M2 complete; M3 next.
 
 This is the current implementation specification for Welkinrim's Competition A PC controller. It replaces conflicting recommendations in the earlier research reports and chat plans. Use [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md) to record execution evidence and changes as implementation proceeds.
 
@@ -205,7 +205,7 @@ Initial gap policy: interval greater than five times median positive delta. This
 - Each output has an optional source column, label, optional serial text, min_us, max_us. Default range 500–2500; require 500 ≤ min ≤ 1500 ≤ max ≤ 2500 because STOP/idle centers every output.
 - One source per destination and initially no duplicate source assignments. Unmapped means constant idle 1500, not electrically disabled.
 - No scaling, reversal, configurable idle, interpolation selection, or hidden zero substitution in core v1.
-- Offline inspection is allowed; final compilation/upload requires known connected capabilities. A capability change invalidates compatibility and requires recompilation where shape/limit differs.
+- Offline inspection is allowed. During M2, compilation against the documented four-channel/8,000-frame reference bench creates a clearly labeled draft. M3 must compare live `INFO` capabilities before upload and require recompilation if shape or capacity differs. This enables a usable conversion demo before bench integration.
 - Do not silently truncate the full source to fit; show required frames and maximum allowed duration and ask the engineer to select a trim.
 
 ### 4.4 Exact compilation algorithm
@@ -344,9 +344,11 @@ For a complete local session, use its boundary snapshots. Avoid extrapolating th
 | GET /snapshot | none | Complete connection/bench/profile/session/counter/operation state |
 | POST /sources | Multipart file | 201 SourceInspection |
 | GET /sources/{id} | none | Inspection and provenance |
+| GET /sources | optional limit | Recent saved sources for browser refresh |
 | GET /sources/{id}/preview | channels, start_us, end_us, max_points | Bounded source traces |
 | POST /profiles | source_id, trim, rate, mapping, expected capability generation | 201 immutable ProfileSummary or validation issues |
 | GET /profiles/{id} | none | Profile settings, hashes, summary |
+| GET /profiles | optional limit | Recent saved profiles for browser refresh |
 | GET /profiles/{id}/preview | channels, max_points | Compiled traces/frame information |
 | GET /profiles/{id}/export.csv | none | Download of compiled profile |
 | POST /bench/connect | request_id, configured bench_id/host/port, mode simulator/hardware | 202 Operation |
@@ -414,7 +416,7 @@ Bench label, host, port default 3333, mode simulator/hardware, connect/disconnec
 |---|---|---|---|
 | M0 | Inspect artifacts, run supplied baselines, write plan/log | Supplied inputs | Completed in documentation phase; evidence linked |
 | M1 | Backend skeleton, dependency lock, schema v1, Flutter shell, API conventions | User authorization to code | Health/snapshot work, DB reopens, shell navigation works; no fake live values |
-| M2 | CSV importer/compiler, profile persistence and preview | M1 | Supplied inspection matches; golden 200-frame case gives 16982; deterministic tests pass |
+| M2 | CSV importer/compiler, profile persistence and preview | M1 | Complete: supplied inspection matches; golden 200-frame case gives 16982; deterministic/API tests pass; Flutter Profile build passes |
 | M3 | WDR parser/client/coordinator, serialized upload and operations | M1 | Official serve-sim receives exact profile; checksums/errors/state behavior pass |
 | M4 | First real end-to-end path, session/counter records | M2+M3 | Flutter imports supplied log, compiles 40–44 s, uploads, START 1, observes completion and saved history |
 | M5 | Full controls, reconnect/reboot/timeout handling, accounting boundaries | M4 | No repeated mutations, stale values explicit, counter history survives refresh/backend restart |

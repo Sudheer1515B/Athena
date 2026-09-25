@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'profile_page.dart';
+import 'theme.dart';
 
 void main() => runApp(const MyApp());
-
-class Palette {
-  static const background = Color(0xFFF4F4F2);
-  static const card = Colors.white;
-  static const ink = Color(0xFF0B0B0B);
-  static const secondary = Color(0xFF52514E);
-  static const muted = Color(0xFF8A8985);
-  static const line = Color(0xFFE3E2DE);
-  static const brand = Color(0xFFC8302E);
-  static const good = Color(0xFF0CA30C);
-  static const critical = Color(0xFFD03B3B);
-}
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key, this.state});
@@ -82,12 +72,10 @@ class _AthenaShellState extends State<AthenaShell> {
                   constraints: const BoxConstraints(maxWidth: 1440),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: switch (page) {
-                      AthenaPage.dashboard => _dashboard(),
-                      AthenaPage.profile => _profile(),
-                      AthenaPage.history => _history(),
-                      AthenaPage.settings => _settings(),
-                    },
+                    child: IndexedStack(index: page.index, children: [
+                      _dashboard(), ProfilePage(api: widget.state.api),
+                      _history(), _settings(),
+                    ]),
                   ),
                 ),
               ),
@@ -332,33 +320,6 @@ class _AthenaShellState extends State<AthenaShell> {
     ],
   );
 
-  Widget _profile() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      BenchCard(
-        title: '1 · Source log',
-        child: _empty('Import and inspection arrive in the next milestone.'),
-      ),
-      const SizedBox(height: 18),
-      BenchCard(
-        title: '2 · Resample & trim',
-        child: _empty(
-          'A connected bench will set the allowed frame count and rate.',
-        ),
-      ),
-      const SizedBox(height: 18),
-      BenchCard(
-        title: '3 · Channel map',
-        child: _empty('No source log or bench channel map yet.'),
-      ),
-      const SizedBox(height: 18),
-      BenchCard(
-        title: '4 · Push to bench',
-        child: _empty('Upload becomes available after validation.'),
-      ),
-    ],
-  );
-
   Widget _history() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -418,56 +379,6 @@ class _AthenaShellState extends State<AthenaShell> {
     child: Text(
       text,
       style: const TextStyle(color: Palette.muted, fontSize: 13),
-    ),
-  );
-}
-
-class HeaderLabel extends StatelessWidget {
-  const HeaderLabel(this.text, {super.key});
-  final String text;
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      color: Palette.secondary,
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      letterSpacing: .4,
-    ),
-  );
-}
-
-class BenchCard extends StatelessWidget {
-  const BenchCard({super.key, this.title, required this.child});
-  final String? title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-    decoration: BoxDecoration(
-      color: Palette.card,
-      border: Border.all(color: Palette.line),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null) ...[
-          Text(
-            title!.toUpperCase(),
-            style: const TextStyle(
-              color: Palette.secondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        child,
-      ],
     ),
   );
 }

@@ -6,7 +6,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 
 ## Current status
 
-**Application implementation: IN PROGRESS; M1 COMPLETE.** Athena now has a tested FastAPI/SQLite skeleton, Flutter service state, and a real empty-state shell based on the supplied HTML/CSS. It does not yet connect to a WDR bench, import a log, or issue control commands; those begin in M2/M3.
+**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV through Flutter and FastAPI, persists originals and immutable profiles, previews traces and exports compiled CSV. Bench TCP connection and controls begin in M3.
 
 **Artifact review and official-tool baseline: COMPLETE.** The official simulator is now available. No replacement simulator is needed or planned. Both in-process and real TCP conformance runs passed. These results assess the supplied simulator/tool, not an implemented Athena controller.
 
@@ -16,7 +16,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 |---|---|---|---|
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
 | M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
-| M2 | CSV importer and deterministic compiler | Not started | Golden case calculated during inspection only |
+| M2 | CSV importer and deterministic compiler | Complete | Golden case and API persistence/export pass; Flutter analyze/tests/build pass |
 | M3 | WDR adapter, uploads and operations | Not started | No Athena socket client exists |
 | M4 | First browser-to-simulator workflow | Not started | Planned 40–44 s source window |
 | M5 | Controls, recovery, accounting | Not started | Plan specifies failure handling |
@@ -167,6 +167,26 @@ The user authorized M0, then the next implementation phase, specified roughly fo
 ### M1 result and next action
 
 M1 acceptance gate is complete: health/snapshot work, the database reopens without loss, shell navigation works, no fake live values are shown, and a release web build is available. M2 is next: parse the supplied `RCOU.csv`, persist source/profile records, implement deterministic trim/map/resample compilation, and prove the 200-frame/SUM16 16982 fixture.
+
+## Entry 003 — 25 September 2026 — M2 CSV import and profile compilation
+
+### Changes made
+
+- Added strict `TimeUS,C1…C16` CSV inspection with line-specific structural errors, per-channel invalid/zero counts, median interval, effective sample rate and detected gaps.
+- Added exact integer-time zero-order-hold compilation, full selected-sample validation, mapping/limit checks, frame-capacity checks, immutable canonical JSON/SHA-256, SUM16, output ranges and loop-step diagnostics.
+- Added source/profile HTTP import, list, detail, bounded preview and compiled CSV export endpoints. Original uploads and profile content persist in SQLite/managed files. Database schema migrated from version 1 to 2.
+- Added Flutter Profile import, trim/rate controls, four-output mapping, source/compiled trace preview, checksum and CSV export, matching the supplied two-column layout. Recent source/profile state is restored after refresh.
+- Chose the documented four-channel/8,000-frame reference capability only as an explicitly labeled offline draft target. M3 must compare live `INFO` before upload.
+
+### Verification
+
+- Backend `python -m unittest -v backend.test_app`: eight tests passed, covering the supplied 9,074-row log, the single gap, exact 200-frame golden output and SUM16 **16982**, persistent HTTP import/profile retrieval/export, invalid values, gap rejection, 30 fps timestamp choice, capacity boundaries and preview spike retention.
+- `flutter analyze`: no issues. `flutter test`: 2/2 pass. `flutter build web --release`: success.
+- New Flutter dependencies resolved: `file_picker` 9.2.3 and `url_launcher` 6.3.2.
+
+### Remaining work
+
+M3 owns the real TCP connection, capability reconciliation, serialized commands and upload. No Athena bench upload or physical PWM verification has occurred yet.
 
 ### Known handout discrepancy
 

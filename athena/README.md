@@ -6,7 +6,7 @@ It will let an engineer import a recorded drone flight log, map actuator command
 
 ## Current status
 
-M1 is complete. The default counter application has been replaced by a tested Dashboard/Profile/History/Settings shell based on the supplied HTML and `mock.css`. It reads an honest empty snapshot from the FastAPI service over HTTP/WebSocket; bench transport, import, compilation and controls arrive in later milestones. The newest handout simulator reports four channels and 8,000 frames and passes its 85-point scorer.
+M1 and M2 are complete. The dashboard shell follows the supplied HTML and `mock.css`. The Profile page imports a `TimeUS,C1…C16` CSV, shows source statistics and gaps, maps channels, compiles a deterministic WDR pulse profile, previews source and compiled traces, and exports the compiled CSV. It restores the most recent source/profile after refresh. Until M3, the compile target is clearly labeled as the reference bench's provisional four channels and 8,000 frames; live `INFO` must match before upload.
 
 ## Intended boundary
 

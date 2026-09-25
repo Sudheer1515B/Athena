@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def open_database(path: Path) -> sqlite3.Connection:
@@ -31,9 +31,8 @@ def migrate(connection: sqlite3.Connection) -> None:
             raise RuntimeError(
                 f"Database schema {current} is newer than this service supports"
             )
-        if current == SCHEMA_VERSION:
-            return
-        connection.executescript(
+        if current == 0:
+            connection.executescript(
             """
             CREATE TABLE source_logs (
                 id TEXT PRIMARY KEY,
@@ -126,11 +125,18 @@ def migrate(connection: sqlite3.Connection) -> None:
             );
             """
         )
-        connection.execute(
+            connection.execute(
             "INSERT INTO schema_migrations(version, applied_at) "
             "VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-            (SCHEMA_VERSION,),
-        )
+            (1,),
+            )
+            current = 1
+        if current < 2:
+            connection.execute("ALTER TABLE profiles ADD COLUMN summary_json TEXT NOT NULL DEFAULT '{}'")
+            connection.execute(
+                "INSERT INTO schema_migrations(version, applied_at) "
+                "VALUES (2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+            )
 
 
 def database_summary(connection: sqlite3.Connection) -> dict[str, int]:

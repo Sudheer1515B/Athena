@@ -10,6 +10,7 @@ class AppState extends ChangeNotifier {
   AppState({BenchApi? api}) : _api = api ?? BenchApi();
 
   final BenchApi _api;
+  BenchApi get api => _api;
   BenchSnapshot? snapshot;
   String? error;
   bool loading = false;
