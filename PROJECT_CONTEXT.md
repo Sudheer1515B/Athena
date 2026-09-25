@@ -2,7 +2,7 @@
 
 This file is the compact-proof handoff for the Welkinrim Technologies hackathon project. Read it before continuing work.
 
-**Current source of implementation decisions:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). **Actual progress/evidence:** [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md). These supersede earlier speculative research. The user has explicitly requested documentation only; do not begin application coding without a subsequent instruction.
+**Current source of implementation decisions:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). **Actual progress/evidence:** [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md). These supersede earlier speculative research. Application implementation is authorized and underway.
 
 ## Problem statement
 
@@ -21,7 +21,10 @@ This file is the compact-proof handoff for the Welkinrim Technologies hackathon 
 - Welkinrim's one-page brief, frozen WDR Protocol v1 manual, `RCOU.csv` sample, UI mockups, OLED states and wiring reference are now present and inspected.
 - The official `wdr_tool.py` is present and fully inspected. It passed 85/85 both in-process and over real localhost TCP with virtual USB. Results are in `planning_evidence/`.
 - No mandatory development input is missing. Raw ArduPilot `.bin` and PX4 `.ulg` samples are absent and remain stretch inputs.
-- Use the official simulator; the user explicitly declined building a replacement simulator. All application implementation remains not started.
+- Use the official simulator; the user explicitly declined building a replacement simulator. M1 application implementation is in progress.
+- The newest source of truth is `handout_controller_teams/`. Its reference bench and simulator report four channels and 8,000 frames.
+- Reproduce the supplied controller HTML/`mock.css` desktop UI in Flutter, using real values or explicit empty states instead of illustrative mock data.
+- Timebox: about four hours for the prototype and 12–15 hours for the full submission.
 
 ## Files to read
 
@@ -124,7 +127,7 @@ STOPPED --START [cycles]--> RUNNING --PAUSE--> PAUSED
 ```
 
 - Open one TCP connection to port 3333, send newline-terminated uppercase commands, and allow only one outstanding command.
-- Route interleaved `OK`, `ERR`, `TEL`, `EVT`, and debug lines by prefix. The command reply timeout is one second.
+- Route interleaved `OK`, `ERR`, `TEL`, `EVT`, and debug lines by whole first token. The protocol expects replies within one second; the organizer's tested clients use a two-second application deadline, which Athena adopts before closing/reconciling the socket.
 - Handshake with `PING`, `INFO`, `STATUS`, and `COUNTERS`, then send `TIME <unix>` and `TEL 1`.
 - `INFO` supplies `proto`, `team`, `ch`, `maxframes`, and `up`; a lower `up` after reconnect indicates a reboot.
 - Upload with `LOAD <rate> <frames>`, ordered `F` lines, and `COMMIT`. Verify the returned pulse-value sum modulo 65536.
@@ -188,7 +191,7 @@ If building new hardware, ESP32 + PCA9685 is the simplest 16-channel option only
 - `C1..C6` contain valid PWM values from 1050 to 1746 microseconds.
 - `C7`, `C8`, and `C11..C14` are always zero; `C9` and `C10` become a constant 1050 only after the gap.
 - Zero is not a legal WDR PWM value and must be treated as inactive/missing source data, not uploaded.
-- At 10 Hz the full log does not fit a 2,000-frame example bench. Query `maxframes` and require trimming.
+- At 10 Hz the full log needs about 9,308 frames and does not fit the newest 8,000-frame reference bench. Query `maxframes` and require trimming or a compatible lower-rate/window choice.
 
 ## P0 hackathon scope
 
@@ -229,7 +232,7 @@ This is a **fault-resilience demonstration**, not an “honest failure story.”
 
 ## Official tool now available
 
-`wdr_tool.py` is present: SHA-256 `3059c64229a677d40d5f1e6d63081a277ebe01934809099f17acb1fcdf6971e4`. It serves four channels with 2,000 frames at TCP 3333, virtual USB at 3334. Pyserial is only needed for actual serial ports. Reboot discards the profile; STOP retains it; TIME is acknowledgement-only in the simulator; rounded counters persist in a shared temp JSON file. Isolate test state with TMPDIR. Use the official source unchanged. No raw `.bin`/`.ulg` is needed for core delivery.
+The newest `handout_controller_teams/wdr_tool.py` is present: SHA-256 `1881ed14d12e7e277b890233aaf3c84b60fcb5c49af6f93d8f9a68459c5b82d5`. It serves four channels with 8,000 frames at TCP 3333, virtual USB at 3334. Pyserial is only needed for actual serial ports. Its simulator reboot discards the profile even though the physical-bench manual says committed profiles survive; STOP retains it; TIME is acknowledgement-only; rounded counters persist in a shared temp JSON file. Isolate test state with TMPDIR. Preserve organizer sources unchanged. No raw `.bin`/`.ulg` is needed for core delivery.
 
 ## Acceptance checks that matter most
 
@@ -249,7 +252,7 @@ This is a **fault-resilience demonstration**, not an “honest failure story.”
 
 ## Next coding step
 
-Wait for the user's instruction to start application coding. Then follow M1 onward in IMPLEMENTATION_PLAN.md; the first complete workflow is:
+Continue M1 onward in IMPLEMENTATION_PLAN.md; the first complete workflow is:
 
 ```text
 RCOU.csv, relative 40–44 s, C1–C4, 50 frames/s

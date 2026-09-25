@@ -2,17 +2,19 @@
 
 This file records the concrete inputs supplied by Welkinrim Technologies for Athena. Treat the original files as immutable evidence and use their SHA-256 values below to detect accidental changes.
 
-**Updated 25 September 2026:** the official tool is now present and verified. Current implementation decisions are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md); execution evidence is in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
+**Updated 25 September 2026:** `handout_controller_teams/` is the newest organizer package and supersedes older root copies where they differ. Current implementation decisions are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md); execution evidence is in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
 
 ## Authority order
 
 When the files disagree, use this order:
 
-1. [`WDR_Manual_and_Protocol.pdf`](WDR_Manual_and_Protocol.pdf) for the actual wire protocol and bench behavior. It labels WDR Protocol v1 as frozen for Hackinfinity 2026.
-   [`wdr_tool.py`](wdr_tool.py) is the executable simulator/conformance reference; source quirks are documented below and in the plan, rather than silently overriding the published contract.
-2. [`one_pager_A_controller.pdf`](one_pager_A_controller.pdf) for the competition problem, required product features, and judging rubric.
-3. The four HTML files for visual and interaction references. They are static mockups, not a protocol definition.
-4. [`RCOU.csv`](RCOU.csv) as the supplied source-log example.
+1. [`WDR_Bench_User_Manual.pdf`](handout_controller_teams/WDR_Bench_User_Manual.pdf) for measured physical reference-bench behavior.
+2. [`WDR_Manual_and_Protocol.pdf`](handout_controller_teams/WDR_Manual_and_Protocol.pdf) for the frozen wire protocol.
+3. [`WDR_Controller_Guide.pdf`](handout_controller_teams/WDR_Controller_Guide.pdf) and the tested Python/JavaScript clients for controller architecture and practical timeouts.
+4. [`wdr_tool.py`](handout_controller_teams/wdr_tool.py) for executable simulator/conformance behavior; documented simulator/firmware differences remain explicit.
+5. [`one_pager_A_controller.pdf`](one_pager_A_controller.pdf) for the competition problem, required product features, and judging rubric.
+6. The controller HTML files and [`mock.css`](mock.css) for exact requested layout/style, subject to protocol-correct values and states.
+7. [`RCOU.csv`](RCOU.csv) as the supplied source-log example.
 
 Athena should discover the connected bench's channel count and storage limit from `INFO`; do not hard-code either the one-pager's 16 channels or the manual's example values.
 
@@ -20,6 +22,13 @@ Athena should discover the connected bench's channel count and storage limit fro
 
 | File | Purpose | SHA-256 |
 |---|---|---|
+| `handout_controller_teams/wdr_tool.py` | Newest official simulator/conformance/client utility | `1881ed14d12e7e277b890233aaf3c84b60fcb5c49af6f93d8f9a68459c5b82d5` |
+| `handout_controller_teams/WDR_Bench_User_Manual.pdf` | Physical reference-bench behavior and wiring | `84331b96dfd5d9706f3dd24b169024f79bd6297c296895afd4297a3bcd36b72` |
+| `handout_controller_teams/WDR_Controller_Guide.pdf` | Controller integration architecture and workflow | `ad3a5ea240a37d1acf804e2b422ae3b1e1bdce61fbc0e6386f7f4bb737d722c0` |
+| `handout_controller_teams/WDR_Manual_and_Protocol.pdf` | Newest frozen WDR protocol copy | `2eec378976e3fffc1899f7f846f3309528994aa1ef5d433393a1f1ba22a96ae7` |
+| `handout_controller_teams/bench_client.py` | Minimal Python client tested on real bench | `47eb56c0c86b12888e1253d573a2926637b487d6859539ad6e8824743839b1b2` |
+| `handout_controller_teams/bench_client.js` | Minimal Node client tested on real bench | `e24bd774a81abb6f97090768d51b89df0e29fa4d397ae8131f06b89e99e1f882` |
+| `mock.css` | Controller UI styling supplied after the HTML | `00b07b1feb7b47664ce3554867bbe56f99f3c1da354972f5a4740b3aaa1367b8` |
 | `wdr_tool.py` | Official simulator and conformance/client utilities | `3059c64229a677d40d5f1e6d63081a277ebe01934809099f17acb1fcdf6971e4` |
 | `WDR_Manual_and_Protocol.pdf` | Frozen WDR protocol v1 and user manual | `50fb853c38c2684e70130f139747504d1f2b7174200bdcdb6fd3a702b566bdbc` |
 | `one_pager_A_controller.pdf` | Competition A problem statement and judging rubric | `2e81590b1c141fe1754e735d3ac5f3a4ce9f940004daf435d2b0d2cb6df2e4f2` |
@@ -66,7 +75,7 @@ Any framework is allowed, but the GUI must run in a browser. Firmware is fixed f
 - Send one uppercase command per line, terminated by `\n`; `\r` is ignored.
 - Words are separated by one space and a line may be at most 128 characters.
 - An empty line is ignored. An overlong line is discarded and answered with `ERR ARGS`.
-- Every nonempty command gets exactly one `OK...` or `ERR...` reply. Send one command, wait up to one second for its reply, then send the next.
+- Every nonempty command gets exactly one `OK...` or `ERR...` reply. Send one command and wait for its reply before the next. The protocol target is one second; the real-bench reference clients use a two-second application timeout.
 - `TEL` and `EVT` lines may arrive before the command reply. Route incoming lines by their first word.
 - Lines that do not begin with `OK`, `ERR`, `TEL`, or `EVT` are debug output and must be ignored by the parser.
 
@@ -77,7 +86,7 @@ Any framework is allowed, but the GUI must run in a browser. Firmware is fixed f
 - Telemetry is disabled on boot and whenever a new TCP client connects. Send `TEL 1` after every connection/reconnection.
 - The bench prints `EVT IP <address>` over USB when it gets or changes its IP.
 - `INFO` includes uptime. A lower uptime after reconnect means the bench rebooted.
-- After reset/power loss the bench returns `STOPPED`, restores saved counters, and never resumes motion automatically. It should rejoin Wi-Fi within 20 seconds.
+- After reset/power loss the physical bench returns `STOPPED`, restores saved counters, retains a valid committed profile, and never resumes motion automatically. It normally boots in about one second and joins Wi-Fi in about two; the protocol allowance is within 20 seconds.
 
 ### Capabilities and PWM behavior
 
@@ -87,7 +96,8 @@ Any framework is allowed, but the GUI must run in a browser. Firmware is fixed f
 - Servo pulses are 500–2500 microseconds at 50 Hz.
 - Playback profiles run at 10–100 frames/s.
 - A committed profile has `frames × N` pulse widths. Every frame must provide exactly `N` values.
-- The bench supports at least 500 frames; `INFO.maxframes` is the real limit. The manual's simulator example reports 2,000.
+- The bench supports at least 500 frames; `INFO.maxframes` is the real limit. The newest reference bench and simulator report 8,000.
+- Rates 51–100 are accepted, but the 50 Hz physical output exposes at most 50 distinct frames each second.
 - All outputs go to the fixed 1500-microsecond idle value after boot and `STOP`.
 
 ### States and commands
@@ -175,7 +185,7 @@ The file has the header `TimeUS,C1,...,C14` and 9,074 data rows.
 
 Zero is outside WDR's allowed pulse range. Treat it as unavailable/inactive for compilation; its precise aircraft-side meaning is not documented in the supplied CSV. Never upload zero as a servo command. Leave those source channels unmapped; a selected invalid zero blocks compilation in v1.
 
-At a 10 Hz profile rate the full timestamp span would need roughly 9,308 frames, which exceeds a 2,000-frame simulator example. Athena must fetch `maxframes` first and expose a trim window whose compiled frame count fits. The long gap must be shown to the user and rejected or trimmed out by default.
+At a 10 Hz profile rate the full timestamp span would need roughly 9,308 frames, which exceeds the newest 8,000-frame reference limit. Athena must fetch `maxframes` first and expose a trim window whose compiled frame count fits. The long gap must be shown to the user and rejected or trimmed out by default.
 
 The input CSV is not the same as WDR's upload CSV example. Athena must convert:
 
@@ -188,7 +198,7 @@ Selected outputs should be resampled deterministically with zero-order hold. Eve
 
 ## Static UI references
 
-The four HTML files are static desktop mockups with no scripts or working connection logic. Implement their compatible functionality in Flutter with a custom Athena layout; the user does not require matching their exact layout.
+The controller HTML files are static desktop mockups with no scripts or working connection logic. The user supplied `mock.css` afterward and requested their exact visual layout in Flutter. Keep protocol-correct, live or explicit empty-state content where mock values are invented.
 
 - Dashboard: connection/time/run chips, run state, target progress, cycle progress, total hours, per-channel live/idle/bench/active values, controls, traces, and recent events.
 - Profile: source importer, trim/rate controls, channel mapping, preview, validation, and upload.
@@ -198,6 +208,16 @@ The four HTML files are static desktop mockups with no scripts or working connec
 Mockup values are illustrative and sometimes conflict with frozen protocol v1. Examples: 50–400 Hz in the mockup versus 10–100 frames/s in WDR v1, configurable per-channel idle values versus a fixed 1500-microsecond protocol idle, and 16 channels versus `INFO`-reported 1–8 in the manual. Use live capabilities and the frozen protocol, not mock values.
 
 ## Hardware reference
+
+The newest physical reference bench uses direct ESP32 PWM and exposes four channels:
+
+- Classic ESP32 DevKit pins 25, 26, 27 and 33; ESP32-S3 pins 4, 5, 6 and 7.
+- 50 Hz servo output, 500–2500 µs, measured within ±2 µs.
+- Separate 5–6 V actuator supply sized for at least 1 A per servo, with common ground.
+- Event network is 2.4 GHz WPA2. The handout contains the event SSID/password; keep deployment configuration outside source code.
+- Only one TCP controller may connect. A second connection takes over immediately.
+
+The older `04_oled_and_wiring.html` describes a separate Competition B PCA9685/OLED concept and must not override the reference-bench manual:
 
 The wiring reference describes:
 
@@ -212,18 +232,18 @@ Hardware details are useful for explaining the system and diagnosing bench behav
 
 ## Official tool findings and verification
 
-The 1,796-line `wdr_tool.py` is now present and fully inspected. Its `test`, `upload`, `term`, `soak`, `serve-sim`, and `makecsv` commands are available. In-process and TCP simulator use require only Python; pyserial is loaded lazily for actual serial ports.
+The newest 1,815-line `handout_controller_teams/wdr_tool.py` is fully inspected. Its `test`, `upload`, `term`, `soak`, `serve-sim`, and `makecsv` commands are available. In-process and TCP simulator use require only Python; pyserial is loaded lazily for actual serial ports.
 
-- Default simulator: four channels, 2,000 frames, team SIM.
+- Default simulator: four channels, 8,000 frames, team SIM.
 - `serve-sim` exposes TCP 3333 and test-only virtual USB 3334, bound to loopback. `--listen` and `--usb-port` select alternate ports. Virtual USB accepts `!RESET`.
 - `--port sim` creates its own device; it does not connect to a serve-sim process.
 - Counters persist in `tempfile.gettempdir()/wdr_sim_counters.json`. Use isolated TMPDIR values and sequential tests to avoid shared-state interference.
-- Reboot loses the profile. STOP retains the committed profile and any partial upload buffer; future cancelled/failed uploads must begin with a fresh LOAD.
+- Simulator reboot loses the profile, despite the physical-bench manual documenting flash persistence. STOP retains the committed profile and any partial upload buffer; future cancelled/failed uploads must begin with a fresh LOAD.
 - Counter reporting/save rounds whole seconds. TIME returns OK without implementing a clock.
 - Built-in upload ignores t_ms and uses --rate; it also sends STOP automatically. Athena must compile source timestamps itself and implement its own controlled adapter.
 - Actual seven-level scorer totals 85; the six-level header comment is stale. Check JSON results because exit zero alone does not imply success.
 - Code inspection found that an extra F after all frames can index outside the buffer. Correct controllers send exactly the declared frame count and never blindly retry timed-out frames. Do not modify the vendor source to hide this.
 
-Both official baseline runs passed **85/85**, with 36 checks each, on 25 September 2026. See [in-process JSON](planning_evidence/wdr-inprocess-2026-09-25.json) and [TCP JSON](planning_evidence/wdr-tcp-2026-09-25.json). The scorer saves before its reboot check, so this does not prove zero-loss abrupt power cuts. Athena itself is not implemented or tested yet.
+Both earlier baseline runs passed **85/85**, with 36 checks each, on 25 September 2026. See [earlier in-process JSON](planning_evidence/wdr-inprocess-2026-09-25.json) and [earlier TCP JSON](planning_evidence/wdr-tcp-2026-09-25.json). The newest 8,000-frame handout tool also passed 85/85 in-process; see [handout JSON](planning_evidence/wdr-handout-inprocess-2026-09-25.json). The scorer saves before its reboot check, so this does not prove zero-loss abrupt power cuts. M1 exists but Athena has not yet completed a bench integration test.
 
 No mandatory development artifact is missing. Raw ArduPilot `.bin` and PX4 `.ulg` examples remain absent and optional for later importer extensions; physical bench/actuator verification remains a venue task.

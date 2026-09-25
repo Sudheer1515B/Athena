@@ -6,7 +6,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 
 ## Current status
 
-**Application implementation: NOT STARTED.** The user requested artifact inspection and detailed documentation only. Athena remains the default Flutter counter application. There is no Athena backend, application database, importer/compiler, WDR adapter, or functioning dashboard yet.
+**Application implementation: IN PROGRESS; M1 COMPLETE.** Athena now has a tested FastAPI/SQLite skeleton, Flutter service state, and a real empty-state shell based on the supplied HTML/CSS. It does not yet connect to a WDR bench, import a log, or issue control commands; those begin in M2/M3.
 
 **Artifact review and official-tool baseline: COMPLETE.** The official simulator is now available. No replacement simulator is needed or planned. Both in-process and real TCP conformance runs passed. These results assess the supplied simulator/tool, not an implemented Athena controller.
 
@@ -15,7 +15,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | ID | Milestone | Status | Evidence / remaining work |
 |---|---|---|---|
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
-| M1 | Backend skeleton/schema, Flutter shell, interfaces | Not started | Await explicit coding instruction |
+| M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
 | M2 | CSV importer and deterministic compiler | Not started | Golden case calculated during inspection only |
 | M3 | WDR adapter, uploads and operations | Not started | No Athena socket client exists |
 | M4 | First browser-to-simulator workflow | Not started | Planned 40–44 s source window |
@@ -121,7 +121,56 @@ Actual level breakdown for both runs:
 
 ### Next action
 
-Wait for the user's explicit instruction to begin implementation. Start at M1, following plan revision 1.0. Keep M0 complete; do not repeat artifact research or build another simulator. Use the saved baselines and rerun targeted checks when implementation changes justify them.
+Continue M1 under the user's implementation authorization. Keep M0 complete; do not build another simulator. Use the newest `handout_controller_teams` artifacts and rerun targeted checks when implementation changes justify them.
+
+## Entry 002 — 25 September 2026 — New controller-team handout reconciliation and M1 start
+
+### Authorization and timebox
+
+The user authorized M0, then the next implementation phase, specified roughly four hours for a prototype and 12–15 hours for the full submission, and requested that the supplied HTML plus `mock.css` be treated as the exact UI target. The user then supplied `handout_controller_teams` and asked for it to be reviewed before continuing.
+
+### New organizer inputs reviewed
+
+- Six-page `WDR_Bench_User_Manual.pdf`, three-page `WDR_Controller_Guide.pdf`, newest frozen protocol PDF.
+- Minimal Python and JavaScript clients stated to be tested on the physical bench.
+- New 1,815-line `wdr_tool.py`, compared against the earlier 1,796-line root copy.
+
+### Corrections and decisions
+
+- Reference bench and newest simulator are four channels with `maxframes=8000`, not 2,000.
+- A real committed profile is flash-persistent across a normal reboot. The supplied simulator still clears its profile on reboot; Athena must tolerate both and never auto-start.
+- Protocol reply target remains one second; tested clients wait two seconds. Athena uses a two-second deadline and reconnect/reconciliation after timeout.
+- Uploads are sequential round trips; the guide estimates about 13 ms/frame, making progress/cancellation/ETA necessary.
+- Profile rates 10–100 are legal, but values above 50 produce at most 50 distinct servo pulses per second.
+- The backend owns the single bench TCP connection and durable database; Flutter uses HTTP/WebSocket only.
+- Explicit invalid-range rejection remains the safe default. Any later clipping option must be explicit and recorded.
+
+### M1 work present
+
+- Added FastAPI health/snapshot/live endpoints and static Flutter build fallback.
+- Added SQLite schema version 1 with source, profile, bench, operation, session, counter epoch/snapshot, event and cycle-observation tables.
+- Replaced the default Flutter counter page with Dashboard/Profile/History/Settings shell using the supplied visual tokens and honest empty states.
+- Added typed Flutter HTTP/WebSocket service state; no fake bench values are emitted.
+- Added pinned backend dependencies and ignored local runtime/virtual-environment data.
+
+### Verification
+
+- New handout tool: built-in simulator reports `proto=1 team=SIM ch=4 maxframes=8000` and passes 85/85 across all seven levels.
+- FastAPI 0.118.0 and Uvicorn 0.37.0 import successfully from `.venv`.
+- `.venv/bin/python -m unittest -v backend.test_app`: 3/3 pass, covering schema reopen/data retention, future-schema rejection, health, honest snapshot and first WebSocket snapshot.
+- `flutter analyze`: no issues.
+- `flutter test`: 2/2 widget tests pass, covering disconnected/disabled empty state and four-stage Profile navigation.
+- `flutter build web --release`: succeeds; Wasm dry run also succeeds.
+- Temporary 1440×900 golden render reviewed against the supplied CSS structure; header, four tiles, channel/control/trace columns and event card align with the target. The temporary capture/test were removed after review.
+- `git diff --check`: clean before final documentation update.
+
+### M1 result and next action
+
+M1 acceptance gate is complete: health/snapshot work, the database reopens without loss, shell navigation works, no fake live values are shown, and a release web build is available. M2 is next: parse the supplied `RCOU.csv`, persist source/profile records, implement deterministic trim/map/resample compilation, and prove the 200-frame/SUM16 16982 fixture.
+
+### Known handout discrepancy
+
+The new manuals say `serve-sim` behaves like the real bench and that committed profiles survive power loss, but the supplied simulator's `_do_reboot` clears `profile` and `profile_len`. Real-firmware behavior takes precedence for product semantics; simulator behavior remains the integration-test expectation.
 
 ## Future entry template
 

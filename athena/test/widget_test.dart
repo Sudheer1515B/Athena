@@ -1,30 +1,45 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:athena/app_state.dart';
+import 'package:athena/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:athena/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets(
+    'empty dashboard shows disconnected state and disabled controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final state = AppState();
+      addTearDown(state.dispose);
+      await tester.pumpWidget(MyApp(state: state));
+      expect(find.text('BENCH DISCONNECTED'), findsOneWidget);
+      expect(
+        find.text('Connect a bench to view its reported channels.'),
+        findsOneWidget,
+      );
+      final start = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, '▶ Start'),
+      );
+      expect(start.onPressed, isNull);
+      expect(find.text('127'), findsNothing);
+    },
+  );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('profile navigation uses the supplied four-stage structure', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MyApp(state: state));
+    await tester.tap(find.text('Profile'));
     await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('1 · SOURCE LOG'), findsOneWidget);
+    expect(find.text('4 · PUSH TO BENCH'), findsOneWidget);
   });
 }

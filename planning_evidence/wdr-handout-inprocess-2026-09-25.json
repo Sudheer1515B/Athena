@@ -1,0 +1,321 @@
+{
+  "board_info": {
+    "proto": "1",
+    "team": "SIM",
+    "ch": "4",
+    "maxframes": "8000",
+    "up": "0"
+  },
+  "levels": [
+    {
+      "level": 1,
+      "name": "Hello (USB)",
+      "points": 5,
+      "max_points": 5,
+      "checks": [
+        {
+          "name": "PING -> OK PONG",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "INFO well-formed",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Unknown command -> ERR UNKNOWN",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "EVT BOOT after reset",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Wi-Fi link",
+      "points": 10,
+      "max_points": 10,
+      "checks": [
+        {
+          "name": "EVT IP on USB after boot",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "TCP port 3333 answers PING/INFO",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Second client takes over",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "TEL off for a new client",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Manual PWM",
+      "points": 5,
+      "max_points": 5,
+      "checks": [
+        {
+          "name": "SET works",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "STATUS reflects new value",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Bad channel -> ERR RANGE",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Bad us -> ERR RANGE",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Missing args -> ERR ARGS",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Profile upload",
+      "points": 10,
+      "max_points": 10,
+      "checks": [
+        {
+          "name": "LOAD/F/COMMIT round-trip",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "SUM correct",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Out-of-order frame -> ERR ARGS",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Too many frames -> ERR FULL",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Early COMMIT -> ERR STATE",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Player",
+      "points": 20,
+      "max_points": 20,
+      "checks": [
+        {
+          "name": "State machine transitions",
+          "points": 5,
+          "max_points": 5,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "ERR STATE on invalid transitions",
+          "points": 4,
+          "max_points": 4,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "EVT CYCLE count/order",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "EVT DONE + final STATUS",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Cycle period within +-2%",
+          "points": 4,
+          "max_points": 4,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "TEL interval ~500ms",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 6,
+      "name": "Counters / power loss",
+      "points": 15,
+      "max_points": 15,
+      "checks": [
+        {
+          "name": "CLEAR works",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "COUNTERS grows while running",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "active_s selectivity",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Back on Wi-Fi within 20s",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Reboot: STOPPED, counters kept",
+          "points": 4,
+          "max_points": 4,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "level": 7,
+      "name": "Resilience",
+      "points": 20,
+      "max_points": 20,
+      "checks": [
+        {
+          "name": "Cycle period +-2% under command flood",
+          "points": 6,
+          "max_points": 6,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Keeps playing while client is gone",
+          "points": 6,
+          "max_points": 6,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Counters keep counting while client is gone",
+          "points": 3,
+          "max_points": 3,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Survives garbage line",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Survives 200-char line",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Survives empty line",
+          "points": 1,
+          "max_points": 1,
+          "pass": true,
+          "reason": ""
+        },
+        {
+          "name": "Burst of 50 commands",
+          "points": 2,
+          "max_points": 2,
+          "pass": true,
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "total_points": 85,
+  "total_max": 85
+}

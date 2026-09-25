@@ -1,8 +1,8 @@
 # Athena — Detailed Implementation Plan
 
-**Revision:** 1.0 · **Date:** 25 September 2026 · **Status:** specification only; application implementation has not begun.
+**Revision:** 1.1 · **Date:** 25 September 2026 · **Status:** M0–M1 complete; M2 next.
 
-This is the current implementation specification for Welkinrim's Competition A PC controller. It replaces conflicting recommendations in the earlier research reports and chat plans. Use [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md) to record execution evidence and changes as implementation proceeds. Do not interpret this document as authorization to start coding: the user's current request is inspection and documentation only.
+This is the current implementation specification for Welkinrim's Competition A PC controller. It replaces conflicting recommendations in the earlier research reports and chat plans. Use [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md) to record execution evidence and changes as implementation proceeds.
 
 ## 1. Objective, scope, and source authority
 
@@ -14,15 +14,21 @@ Athena is the Flutter Web dashboard; the backend runs on the engineer's PC. The 
 
 ### 1.2 Source precedence and agreed preferences
 
-1. The supplied frozen [WDR manual](WDR_Manual_and_Protocol.pdf) specifies the wire contract.
-2. The supplied [wdr_tool.py](wdr_tool.py) is the executable simulator and conformance reference. Record implementation quirks explicitly; do not silently turn simulator bugs into required firmware behavior.
-3. The [competition brief](one_pager_A_controller.pdf) defines product objectives and judging.
-4. The four HTML files define desired functionality and provide visual references. Athena need not copy their exact layout.
-5. Older research is background only when it conflicts with these artifacts.
+1. The newest [bench user manual](handout_controller_teams/WDR_Bench_User_Manual.pdf) specifies the reference hardware and its measured behavior.
+2. The newest frozen [WDR protocol](handout_controller_teams/WDR_Manual_and_Protocol.pdf) specifies the wire contract.
+3. The [controller guide](handout_controller_teams/WDR_Controller_Guide.pdf) and tested [Python](handout_controller_teams/bench_client.py)/[JavaScript](handout_controller_teams/bench_client.js) clients specify the intended browser-server-bench architecture and practical connection behavior.
+4. The newest [wdr_tool.py](handout_controller_teams/wdr_tool.py) is the executable simulator and conformance reference. Record implementation quirks explicitly; do not silently turn simulator limitations into required real-firmware behavior.
+5. The [competition brief](one_pager_A_controller.pdf) defines product objectives and judging.
+6. The three controller HTML files plus [mock.css](mock.css) define the requested desktop layout and styling. Protocol-invalid sample values remain illustrative only.
+7. Older root copies and research are background only when they conflict with these artifacts.
 
-User decisions: use Flutter; follow the newest supplied requirements; use the official simulator, not a substitute; cover the HTML functionality with a custom layout; do not start application code during this documentation task.
+User decisions: use Flutter; follow the newest supplied requirements; use the official simulator, not a substitute; reproduce the supplied HTML/CSS controller layout in Flutter while replacing illustrative values with real or explicit empty state; implementation is authorized.
 
-### 1.3 Completion tiers
+### 1.3 Delivery timebox
+
+The hackathon allows about four hours for a demonstrable prototype and 12–15 hours for the full submission. Prioritize one vertical path: service/schema/shell → deterministic CSV conversion → WDR connection/upload/run → persisted counters/history. Keep PDF polish and optional import formats behind the proven path. Every milestone must stay runnable; do not spend the prototype window on speculative abstractions.
+
+### 1.4 Completion tiers
 
 **Core delivery:** supplied RCOU CSV import; trim/map/resample/preview; validated profile upload; Start/Pause/Resume/Stop; cycle target; manual output setting; counter reset; dashboard; time-sync acknowledgement; reconnect/reboot handling; SQLite sessions/events; date/channel filtering; CSV export; reproducible setup and tests.
 
@@ -30,7 +36,7 @@ User decisions: use Flutter; follow the newest supplied requirements; use the of
 
 **Deferred extensions:** raw ArduPilot `.bin` and PX4 `.ulg` import, multi-bench control, cloud deployment, accounts, firmware changes, mobile-native builds, cross-bench actuator asset management, life prediction. No corresponding raw logs are supplied. Optional actuator serial text may be stored in a mapping, but do not present a global asset-lifetime ledger in v1.
 
-### 1.4 Judging alignment
+### 1.5 Judging alignment
 
 | Category | Points | Evidence Athena should demonstrate |
 |---|---:|---|
@@ -47,45 +53,50 @@ The tool's 85-point firmware scorer is a different assessment. An 85/85 simulato
 
 | Input | Findings |
 |---|---|
-| `wdr_tool.py` | 1,796 lines; official simulator, TCP/serial clients, scorer, uploader, sample generator, soak utility |
-| `WDR_Manual_and_Protocol.pdf` | Four-page frozen WDR v1 contract |
+| `handout_controller_teams/wdr_tool.py` | 1,815 lines; newest official simulator, TCP/serial clients, scorer, uploader, sample generator, soak utility |
+| `handout_controller_teams/WDR_Manual_and_Protocol.pdf` | Four-page frozen WDR v1 contract; 8,000-frame reference example |
+| `handout_controller_teams/WDR_Bench_User_Manual.pdf` | Six-page reference-hardware manual, flash persistence, wiring and verified bench results |
+| `handout_controller_teams/WDR_Controller_Guide.pdf` | Three-page controller integration guide |
+| `handout_controller_teams/bench_client.py` / `.js` | Minimal clients tested on the real bench |
 | `one_pager_A_controller.pdf` | Competition A brief, required features, rubric |
 | `RCOU.csv` | 9,074 samples, TimeUS plus C1–C14, approximately 10 Hz |
 | `01_dashboard.html` | Dashboard, controls, channel meters, traces, recent events |
 | `02_profile_import.html` | Source selection, trim/rate/map, preview, upload |
 | `03_history.html` | Filters, sessions, events, CSV/PDF exports |
-| `04_oled_and_wiring.html` | Competition B hardware/OLED reference; not a UI implementation requirement |
+| `04_oled_and_wiring.html` | Older Competition B hardware/OLED reference; not the authoritative reference-bench wiring |
+| `mock.css` | Exact controller-page visual tokens and desktop geometry requested by the user |
 | `athena/` | Default Flutter counter app; Dart SDK constraint `^3.13.4` |
 
-Tool SHA-256: `3059c64229a677d40d5f1e6d63081a277ebe01934809099f17acb1fcdf6971e4`. Other source hashes are in [SUPPLIED_ARTIFACTS.md](SUPPLIED_ARTIFACTS.md). Preserve originals unchanged.
+Newest tool SHA-256: `1881ed14d12e7e277b890233aaf3c84b60fcb5c49af6f93d8f9a68459c5b82d5`. Other source hashes are in [SUPPLIED_ARTIFACTS.md](SUPPLIED_ARTIFACTS.md). Preserve organizer inputs unchanged.
 
 ### 2.2 WDR facts to implement
 
 - Plain TCP on port 3333; USB serial 115200 8N1 is for optional diagnostics. Browser WebSocket traffic terminates at FastAPI, not at the bench.
 - ASCII uppercase commands, single spaces, newline terminator, maximum 128 characters before the newline; ignore carriage returns on receive.
-- Exactly one OK/ERR reply per nonempty command; one outstanding command; one-second reply timeout.
+- Exactly one OK/ERR reply per nonempty command and one outstanding command. The protocol expects a reply within one second; the organizer's real-bench reference clients use a two-second application deadline.
 - TEL and EVT can precede replies. Debug lines must not disrupt parsing.
 - States: STOPPED, RUNNING, PAUSED. No ARM, ABORT, FAULT_RESET, boot UUID, request UUID, profile digest query, rate query, per-frame execution ACK, or watchdog-stop command exists in WDR v1.
 - Channel indices are zero-based. Manual describes 1–8; simulator reports four. Athena's structures support up to 16, but output controls are sized from INFO. Reject unsupported protocol versions or channel counts outside 1–16.
 - Pulses 500–2500 µs; idle fixed at 1500 µs; physical servo PWM 50 Hz; profile update rate 10–100 frames/s. These are different rates.
-- Simulator limit is 2,000 frames; always use INFO.maxframes. At 50 frames/s this permits 40 seconds; at 10, 200 seconds; at 100, 20 seconds.
+- Newest simulator/reference bench limit is 8,000 frames; always use INFO.maxframes. That is 160 seconds at 50 frames/s, 800 seconds at 10, and 80 seconds at 100. Rates above 50 are accepted but a 50 Hz servo receives at most 50 distinct pulses per second, so show a warning.
 - New TCP client displaces the previous client and turns telemetry off. Link loss does not stop motion or accounting.
 - Telemetry nominally every 500 ms. Cycle and done events contain no bench timestamps.
 - COUNTERS returns lifetime cycles, run_s, and active_s for each channel. Active means RUNNING and absolute distance from 1500 strictly greater than 25 µs.
 - Pause holds PWM but stops counter accrual. Manual SET while stopped does not accrue running/active time.
 - STOP centers outputs, resets frame to zero, and saves counters. Target completion also stops, centers, and saves.
 - Saves occur at least every minute while running and on STOP/PAUSE/DONE. Power loss may roll back unsaved time and completed cycles; do not promise zero loss.
+- A committed real-bench profile is stored in flash and normally survives power loss. Power during save yields either the previous valid profile or no profile, never a half-written profile. `LOAD` deletes the prior profile immediately.
 
 ### 2.3 Source-code details absent or easy to miss in the manual
 
 | Detail | Evidence | Consequence |
 |---|---|---|
-| Defaults: CH=4, MAXFRAMES=2000, TEAM=SIM | Tool constants near line 374 | Discover capabilities, do not hard-code examples |
+| Defaults: CH=4, MAXFRAMES=8000, TEAM=SIM | New tool constants near line 374 | Discover capabilities, do not hard-code examples |
 | Persistent state is `tempfile.gettempdir()/wdr_sim_counters.json` | Tool line 378 | Isolate TMPDIR for tests; simultaneous independent simulators must not share it |
 | `--port sim` creates a new in-process device | Bench constructor | It does not connect to an existing serve-sim process |
 | Real TCP server and virtual USB | cmd_serve_sim, line 1654 | Default 3333/3334; both bind only 127.0.0.1 |
 | `!RESET` is accepted on virtual USB only | usb_client | Keep it out of the production controller command set |
-| Simulator reboot clears the profile | _do_reboot | Re-upload before the next Start; no automatic restart |
+| Simulator reboot clears the profile, while the real bench retains a committed flash profile | `_do_reboot` versus newest bench manual §9 | Support both observed outcomes; never auto-restart; re-upload before Athena initiates a new run when identity is uncertain |
 | STOP retains committed profile and upload buffer | _dispatch | Stopped is not equivalent to profile absent or upload cleared |
 | LOAD discards a previously committed profile | _dispatch | Failed replacement must invalidate local upload verification |
 | COUNTERS and saved seconds use Python round() | _dispatch/save_counters | Allow integer quantization in tests; do not assume truncation or subsecond precision |
@@ -95,12 +106,13 @@ Tool SHA-256: `3059c64229a677d40d5f1e6d63081a277ebe01934809099f17acb1fcdf6971e4`
 | Source banner describes an old six-level split | Actual LEVELS table near line 1369 | Executable levels 1–7 total 85; use actual results |
 | cmd_test returns zero even if checks fail | cmd_test | Inspect every JSON check and totals, not exit code alone |
 | A repeated F after all expected frames can index outside load_buf | Static inspection of F handler | Never send beyond n−1 or blindly retry a frame; do not modify vendor tool |
+| ReplyReader skips late replies for three seconds after a timeout | New tool `LATE_REPLY_WINDOW` | Athena closes the timed-out socket, which gives stronger correlation isolation |
 
 Static quirks above are source findings; passing the official scorer does not prove every edge case. The scorer's reboot case saves with PAUSE first, so its passing result does not establish zero-loss abrupt-power-cut behavior.
 
 ### 2.4 Baseline already executed
 
-On 25 September 2026, the original tool passed **85/85 in-process and 85/85 over real localhost TCP plus virtual USB**. Tests used an isolated temporary directory and ports 43333/43334. The inspection server was stopped afterward. JSON evidence is stored under [planning_evidence](planning_evidence/). No real hardware was exercised.
+On 25 September 2026, the earlier tool passed **85/85 in-process and 85/85 over real localhost TCP plus virtual USB**. The newest handout tool also passed **85/85 in-process** with `ch=4 maxframes=8000`. Durable JSON evidence for all three runs is stored under [planning_evidence](planning_evidence/). No physical hardware was exercised by Athena.
 
 ### 2.5 Sample log and first integration fixture
 
@@ -221,7 +233,7 @@ Offer compiled CSV export with t_ms,ch0…chN−1 and a companion metadata recor
 
 ### 5.1 Connection lifecycle
 
-Use asyncio TCP streams with TCP_NODELAY. Connect timeout three seconds, command reply timeout one second, bounded receive-line size 4 KiB (larger than command limit to accommodate diagnostics). Discard bounded debug lines; oversized/unbounded or malformed protocol lines trigger a recorded protocol error and reconnect. Match whole first tokens, not arbitrary prefix strings.
+Use asyncio TCP streams with TCP_NODELAY. Connect timeout three seconds, command deadline two seconds (the tested organizer-client value), bounded receive-line size 4 KiB (larger than command limit to accommodate diagnostics). The bench is still expected to answer within the protocol's one-second target. Discard bounded debug lines; oversized/unbounded or malformed protocol lines trigger a recorded protocol error and reconnect. Match whole first tokens, not arbitrary prefix strings.
 
 Handshake serially: PING → INFO → STATUS → COUNTERS → TIME unix_seconds → TEL 1. Validate required keys and numeric/vector shapes. Preserve unknown fields for diagnostics; ignore unknown EVT types after recording them. TIME ERR UNKNOWN leaves time-sync unsupported with a visible warning; valid control can continue because time sync is optional. Other handshake failures leave connection unsynchronized.
 
@@ -241,6 +253,8 @@ Every fresh socket increments a local connection generation. Use a single reader
 ### 5.3 Upload procedure
 
 Require stopped, connected, fresh status and compatible immutable profile. Mark previous local upload verification invalid before LOAD, because a successful LOAD destroys the previous bench profile. Send LOAD R F, ordered F 0…F−1, and COMMIT with one reply per line. Record acknowledged progress, but do not store a history event for every frame.
+
+Estimate upload duration from acknowledged round trips; the guide reports about 13 ms per frame over Wi-Fi, so 4,000 frames can take about a minute. This is an estimate, not a timeout. Preflight rate, pulse range, exact connected channel count, frame capacity and checksum before LOAD. Reject invalid values by default; if clipping is offered later, it must be an explicit, counted conversion stored in profile diagnostics.
 
 On OK SUM=s matching local SUM16, mark the profile verified for the current connection generation and store the observed upload operation. On ERR, timeout, disconnect, malformed checksum or mismatch, mark failed/uncertain and prohibit Start from that profile. No automatic fallback to the former profile. User may retry a complete upload while stopped.
 
@@ -434,7 +448,7 @@ At each gate, update IMPLEMENTATION_LOG with changed areas, exact checks/results
 | R03 | 1475/1525 vs 1474/1526 µs profiles | Strict deadband; paused/manual time excluded; allow ~1–2 s rounding/timing tolerance |
 | R04 | Link absent for ≥6 s during running | Playback/counters advance; TEL must be re-enabled on reconnect |
 | R05 | Lost START reply, including short run completed before reconnect | No second START; success or uncertainty based on observations |
-| R06 | Saved reboot via virtual USB | STOPPED, centered, saved counters retained, profile absent |
+| R06 | Saved reboot via virtual USB and later physical bench | Both STOPPED/centered with counters retained; supplied simulator reports no profile, real firmware retains committed profile unless save was interrupted |
 | R07 | Abrupt reset before checkpoint | Unsaved rollback visible; no automatic restart; old local observations preserved |
 | R08 | Counter reset and ambiguous CLEAR | New boundary; no negative hours or deletion of history |
 | D01 | Same request UUID/body twice; changed body same UUID | Single send/reused operation; conflict for changed body |
@@ -454,10 +468,10 @@ Run the provided scorer in its own temporary directory, sequentially. Set a uniq
 Reference commands from the workspace root, with output paths selected by the implementation test runner:
 
 ```text
-python3 wdr_tool.py test --port sim --json <results.json>
-python3 wdr_tool.py serve-sim --listen 3333 --usb-port 3334
-python3 wdr_tool.py test --host 127.0.0.1 --serial tcp://127.0.0.1:3334 --json <results.json>
-python3 wdr_tool.py soak --host 127.0.0.1 --minutes 30
+python3 handout_controller_teams/wdr_tool.py test --port sim --json <results.json>
+python3 handout_controller_teams/wdr_tool.py serve-sim --listen 3333 --usb-port 3334
+python3 handout_controller_teams/wdr_tool.py test --host 127.0.0.1 --serial tcp://127.0.0.1:3334 --json <results.json>
+python3 handout_controller_teams/wdr_tool.py soak --host 127.0.0.1 --minutes 30
 ```
 
 The scorer/soak performs STOP, LOAD, START and possibly CLEAR/reset; it must not run concurrently with Athena on the same bench. It takes over the single TCP client. Hardware scorer/reset actions require a deliberate diagnostic session, not an automatic application startup check. Pyserial is needed for actual serial ports, not in-process/TCP simulator paths.
@@ -468,20 +482,20 @@ During implementation run backend unit/integration checks, flutter analyze, flut
 
 ### 9.1 Demo sequence
 
-1. Start the official simulator and Athena; connect and show four channels/2,000-frame capacity from INFO.
+1. Start the newest official simulator and Athena; connect and show four channels/8,000-frame capacity from INFO.
 2. Import RCOU.csv, show its zero channels and 23.5-second gap.
 3. Select C1–C4 and relative 40–44 seconds at 50 Hz; show 200 frames and checksum 16982.
 4. Upload, verify checksum, start three cycles. Show live commands and bench/active meters in seconds as well as hours.
 5. In a separate endurance run, disconnect the controller long enough for cycles to continue; reconnect and reconcile counters without issuing another Start.
 6. Pause and show held outputs with stable counters. Resume, then Stop; show 1500 µs and history.
-7. Use a deliberate simulator reset through virtual USB after a saved checkpoint; show stopped state, retained saved counters and missing profile requiring upload.
+7. Use a deliberate simulator reset through virtual USB after a saved checkpoint; show stopped state and retained saved counters. Explain that the simulator loses its profile while the documented real bench retains a valid committed profile, and Athena does not auto-restart either.
 8. Refresh/restart the dashboard/backend, reconnect, inspect persisted sessions/events and export evidence. Never claim a reboot automatically resumes the run.
 
 ### 9.2 Remaining constraints
 
 - No missing mandatory development artifact remains. Physical bench availability, actuator-specific limits, event-network access and hardware INFO are venue checks.
 - WDR cannot prove profile identity across takeover, exact event times during an outage, physical motion, or independent per-channel energized time. Preserve uncertainty rather than inventing missing fields.
-- The newest manual defines 1–8 outputs and 10–100 frames/s. The simulator exercises only four channels. Compiler/UI fixtures can cover 16, but 16-channel real-protocol compatibility remains unverified until such firmware is supplied.
+- The frozen protocol defines 1–8 outputs and 10–100 frames/s; the newest physical manual and simulator exercise four channels. Compiler/UI fixtures can cover 16 because the challenge brief requests it, but 16-channel real-protocol compatibility remains unverified until such firmware is supplied.
 - Motor/ESC idle may not equal 1500 µs. The fixed WDR STOP behavior must be reviewed with the organizers before attaching unsuitable loads; the PC controller cannot override firmware idle semantics.
 - Initial Flutter command inspection was sandbox-blocked while attempting to update the global SDK cache; resolve access normally when implementation requires Flutter checks. No SDK/package changes were made in this planning task.
 

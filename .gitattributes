@@ -1,0 +1,2 @@
+# Preserve the organizer-supplied CSS byte-for-byte as source evidence.
+/mock.css -diff -text

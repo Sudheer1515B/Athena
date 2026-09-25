@@ -6,7 +6,7 @@ It will let an engineer import a recorded drone flight log, map actuator command
 
 ## Current status
 
-This directory is intentionally a fresh project created with `flutter create`. It still contains the default counter application. Welkinrim's frozen WDR Protocol v1, challenge brief, sample `RCOU.csv`, UI/hardware references and official `wdr_tool.py` have been inspected. The supplied simulator passed 85/85 both in-process and over TCP; Athena itself is not implemented. The current user request is documentation only, so do not begin coding without a subsequent instruction.
+M1 is complete. The default counter application has been replaced by a tested Dashboard/Profile/History/Settings shell based on the supplied HTML and `mock.css`. It reads an honest empty snapshot from the FastAPI service over HTTP/WebSocket; bench transport, import, compilation and controls arrive in later milestones. The newest handout simulator reports four channels and 8,000 frames and passes its 85-point scorer.
 
 ## Intended boundary
 
@@ -20,9 +20,9 @@ Flutter owns presentation and operator interaction:
 
 FastAPI will own binary log parsing, deterministic profile generation, simulator/bench communication, the run state machine and SQLite persistence. It bridges Flutter HTTP/WebSocket traffic to the bench's line-based TCP protocol on port 3333. The simulator or hardware controller must generate real-time PWM playback from an uploaded profile; Flutter must not schedule individual servo frames.
 
-## Before coding
+## Project references
 
-Read [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) for the current detailed specification and [`../IMPLEMENTATION_LOG.md`](../IMPLEMENTATION_LOG.md) for actual progress. [`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md) and [`../SUPPLIED_ARTIFACTS.md`](../SUPPLIED_ARTIFACTS.md) preserve context and source facts. Use the official simulator and live `INFO` capabilities; older research proposals are superseded where they conflict.
+Read [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) for the current detailed specification and [`../IMPLEMENTATION_LOG.md`](../IMPLEMENTATION_LOG.md) for actual progress. [`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md) and [`../SUPPLIED_ARTIFACTS.md`](../SUPPLIED_ARTIFACTS.md) preserve context and source facts. Use `../handout_controller_teams/` and live `INFO` capabilities; older root copies and research proposals are superseded where they conflict.
 
 ## Basic Flutter commands
 

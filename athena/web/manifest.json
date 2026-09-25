@@ -1,12 +1,12 @@
 {
-    "name": "athena",
-    "short_name": "athena",
+    "name": "Athena Replay Bench",
+    "short_name": "Athena",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F4F4F2",
+    "theme_color": "#111111",
+    "description": "Welkinrim durability replay bench controller.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -1,122 +1,473 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'app_state.dart';
+
+void main() => runApp(const MyApp());
+
+class Palette {
+  static const background = Color(0xFFF4F4F2);
+  static const card = Colors.white;
+  static const ink = Color(0xFF0B0B0B);
+  static const secondary = Color(0xFF52514E);
+  static const muted = Color(0xFF8A8985);
+  static const line = Color(0xFFE3E2DE);
+  static const brand = Color(0xFFC8302E);
+  static const good = Color(0xFF0CA30C);
+  static const critical = Color(0xFFD03B3B);
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, this.state});
 
-  // This widget is the root of your application.
+  final AppState? state;
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final AppState state;
+
+  @override
+  void initState() {
+    super.initState();
+    state = widget.state ?? AppState();
+    if (widget.state == null) state.connect();
+  }
+
+  @override
+  void dispose() {
+    if (widget.state == null) state.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Athena · Replay Bench',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      useMaterial3: true,
+      scaffoldBackgroundColor: Palette.background,
+      fontFamily: 'Roboto',
+      colorScheme: ColorScheme.fromSeed(seedColor: Palette.brand),
+    ),
+    home: AthenaShell(state: state),
+  );
+}
+
+enum AthenaPage { dashboard, profile, history, settings }
+
+class AthenaShell extends StatefulWidget {
+  const AthenaShell({super.key, required this.state});
+  final AppState state;
+
+  @override
+  State<AthenaShell> createState() => _AthenaShellState();
+}
+
+class _AthenaShellState extends State<AthenaShell> {
+  AthenaPage page = AthenaPage.dashboard;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.state,
+    builder: (context, _) => Scaffold(
+      body: Column(
+        children: [
+          _topBar(),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1440),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: switch (page) {
+                      AthenaPage.dashboard => _dashboard(),
+                      AthenaPage.profile => _profile(),
+                      AthenaPage.history => _history(),
+                      AthenaPage.settings => _settings(),
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    ),
+  );
+
+  Widget _topBar() {
+    final connected = widget.state.snapshot?.connectionState == 'CONNECTED';
+    return Container(
+      height: 56,
+      color: const Color(0xFF111111),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          const Text(
+            'WELKINRIM',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .4,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'Replay Bench',
+            style: TextStyle(
+              color: Color(0xFFF26A68),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 32),
+          for (final item in AthenaPage.values) _navItem(item),
+          const Spacer(),
+          if (widget.state.error != null)
+            _chip('SERVICE OFFLINE', Palette.critical)
+          else
+            _chip(
+              connected ? 'BENCH CONNECTED' : 'BENCH DISCONNECTED',
+              connected ? Palette.good : Palette.muted,
+            ),
+        ],
+      ),
     );
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  Widget _navItem(AthenaPage item) {
+    final selected = item == page;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: TextButton(
+        onPressed: () => setState(() => page = item),
+        style: TextButton.styleFrom(
+          foregroundColor: selected ? Colors.white : const Color(0xFFBBBBBB),
+          backgroundColor: selected ? const Color(0xFF2A2A2A) : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        child: Text(switch (item) {
+          AthenaPage.dashboard => 'Dashboard',
+          AthenaPage.profile => 'Profile',
+          AthenaPage.history => 'History',
+          AthenaPage.settings => 'Settings',
+        }),
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+  Widget _chip(String label, Color dot) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    decoration: BoxDecoration(
+      border: Border.all(color: const Color(0xFF333333)),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFFDDDDDD), fontSize: 12.5),
+        ),
+      ],
+    ),
+  );
+
+  Widget _dashboard() {
+    final isNarrow = MediaQuery.sizeOf(context).width < 1050;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.state.error != null) ...[
+          _banner(widget.state.error!),
+          const SizedBox(height: 18),
+        ],
+        _tiles(isNarrow),
+        const SizedBox(height: 18),
+        if (isNarrow)
+          Column(
+            children: [_channels(), const SizedBox(height: 18), _rightColumn()],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _channels()),
+              const SizedBox(width: 18),
+              SizedBox(width: 700, child: _rightColumn()),
+            ],
+          ),
+        const SizedBox(height: 18),
+        BenchCard(
+          title: 'Recent events',
+          child: _empty('Events will appear when a bench session is recorded.'),
+        ),
+      ],
+    );
+  }
+
+  Widget _tiles(bool narrow) {
+    final tiles = [
+      _tile(
+        'Run state',
+        widget.state.snapshot?.connectionState == 'CONNECTED'
+            ? 'Unknown'
+            : 'Disconnected',
+        'No live bench state yet',
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+      _tile('Cycles completed', '—', 'Connect a bench for counters'),
+      _tile('Current cycle', '—', 'No profile is running'),
+      _tile('Total bench hours', '—', 'Reported by the bench'),
+    ];
+    if (narrow) {
+      return Wrap(
+        spacing: 18,
+        runSpacing: 18,
+        children: [for (final tile in tiles) SizedBox(width: 290, child: tile)],
+      );
+    }
+    return Row(
+      children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i != 0) const SizedBox(width: 18),
+          Expanded(child: tiles[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _tile(String label, String value, String detail) => BenchCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Palette.secondary,
+            fontSize: 12.5,
+            letterSpacing: .6,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Palette.ink,
+            fontSize: 30,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          detail,
+          style: const TextStyle(color: Palette.muted, fontSize: 12.5),
+        ),
+      ],
+    ),
+  );
+
+  Widget _channels() => BenchCard(
+    title: 'Channels',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Expanded(child: HeaderLabel('NAME')),
+            SizedBox(width: 76, child: HeaderLabel('LIVE µs')),
+            SizedBox(width: 72, child: HeaderLabel('IDLE µs')),
+            SizedBox(width: 66, child: HeaderLabel('ACTIVE h')),
+          ],
+        ),
+        const Divider(color: Palette.line),
+        _empty('Connect a bench to view its reported channels.'),
+      ],
+    ),
+  );
+
+  Widget _rightColumn() => Column(
+    children: [
+      BenchCard(
+        title: 'Controls',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton(onPressed: null, child: const Text('▶ Start')),
+                OutlinedButton(onPressed: null, child: const Text('Ⅱ Pause')),
+                FilledButton(onPressed: null, child: const Text('■ Stop')),
+                OutlinedButton(
+                  onPressed: null,
+                  child: const Text('Reset counters…'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Controls become available after bench integration.',
+              style: TextStyle(color: Palette.muted, fontSize: 12.5),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      const SizedBox(height: 18),
+      BenchCard(
+        title: 'Live traces · this cycle',
+        child: SizedBox(
+          height: 230,
+          child: Center(
+            child: _empty('No commanded PWM trace is available yet.'),
+          ),
+        ),
       ),
-    );
-  }
+    ],
+  );
+
+  Widget _profile() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      BenchCard(
+        title: '1 · Source log',
+        child: _empty('Import and inspection arrive in the next milestone.'),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(
+        title: '2 · Resample & trim',
+        child: _empty(
+          'A connected bench will set the allowed frame count and rate.',
+        ),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(
+        title: '3 · Channel map',
+        child: _empty('No source log or bench channel map yet.'),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(
+        title: '4 · Push to bench',
+        child: _empty('Upload becomes available after validation.'),
+      ),
+    ],
+  );
+
+  Widget _history() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      BenchCard(
+        title: 'Range',
+        child: _empty(
+          'Date filtering becomes available with recorded sessions.',
+        ),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(
+        title: 'Active hours per channel',
+        child: _empty('No counter observations recorded.'),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(title: 'Sessions', child: _empty('No sessions recorded.')),
+      const SizedBox(height: 18),
+      BenchCard(title: 'Events', child: _empty('No events recorded.')),
+    ],
+  );
+
+  Widget _settings() => BenchCard(
+    title: 'Bench connection',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'WDR Protocol v1 · TCP port 3333',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Connection setup arrives with the bench transport milestone.',
+          style: TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Service: ${widget.state.error == null ? 'Available' : 'Unavailable'}',
+          style: const TextStyle(color: Palette.secondary),
+        ),
+      ],
+    ),
+  );
+
+  Widget _banner(String message) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFECEC),
+      border: Border.all(color: Palette.critical),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(message, style: const TextStyle(color: Palette.critical)),
+  );
+
+  Widget _empty(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 15),
+    child: Text(
+      text,
+      style: const TextStyle(color: Palette.muted, fontSize: 13),
+    ),
+  );
+}
+
+class HeaderLabel extends StatelessWidget {
+  const HeaderLabel(this.text, {super.key});
+  final String text;
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      color: Palette.secondary,
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      letterSpacing: .4,
+    ),
+  );
+}
+
+class BenchCard extends StatelessWidget {
+  const BenchCard({super.key, this.title, required this.child});
+  final String? title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+    decoration: BoxDecoration(
+      color: Palette.card,
+      border: Border.all(color: Palette.line),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null) ...[
+          Text(
+            title!.toUpperCase(),
+            style: const TextStyle(
+              color: Palette.secondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        child,
+      ],
+    ),
+  );
 }
