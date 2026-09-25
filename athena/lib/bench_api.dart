@@ -137,8 +137,18 @@ class BenchApi {
     ),
   );
 
-  Future<BenchSnapshot> disconnectUsb() async => BenchSnapshot.fromJson(
-    _decodeObject(await _client.post(endpoint('bench/usb/disconnect'))),
+  Future<BenchSnapshot> connectSimulator() async => BenchSnapshot.fromJson(
+    _decodeObject(
+      await _client.post(
+        endpoint('bench/simulator/connect'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'port': 3333}),
+      ),
+    ),
+  );
+
+  Future<BenchSnapshot> disconnectBench() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('bench/disconnect'))),
   );
 
   Future<BenchSnapshot> uploadProfile(String profileId) async =>

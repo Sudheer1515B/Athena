@@ -12,10 +12,12 @@ class ProfilePage extends StatefulWidget {
     super.key,
     required this.api,
     required this.benchConnected,
+    required this.transport,
     required this.onUpload,
   });
   final BenchApi api;
   final bool benchConnected;
+  final String? transport;
   final Future<void> Function(String) onUpload;
 
   @override
@@ -557,12 +559,16 @@ class _ProfilePageState extends State<ProfilePage> {
                 ? null
                 : () => widget.onUpload(profile!['id'].toString()),
             icon: const Icon(Icons.upload, size: 18),
-            label: const Text('Upload to USB bench'),
+            label: Text(
+              widget.transport == 'SIMULATOR'
+                  ? 'Upload to simulator'
+                  : 'Upload to USB bench',
+            ),
           ),
           if (!widget.benchConnected) ...[
             const SizedBox(height: 8),
             const Text(
-              'Connect the USB bench in Settings first.',
+              'Connect a bench or simulator in Settings first.',
               style: TextStyle(color: Palette.muted, fontSize: 12.5),
             ),
           ],

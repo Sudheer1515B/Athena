@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .profiles import MAX_SOURCE_BYTES, ProfileIssue, compile_profile, inspect_csv
-from .bench_usb import BenchError, UsbBench
+from .bench_usb import BenchError, TcpBench, UsbBench
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +64,10 @@ class CompileRequest(BaseModel):
 
 class UsbConnectRequest(BaseModel):
     port: str = Field(min_length=1)
+
+
+class SimulatorConnectRequest(BaseModel):
+    port: int = Field(default=3333, ge=1, le=65535)
 
 
 class StartRequest(BaseModel):
@@ -160,7 +164,20 @@ def snapshot() -> dict:
 @app.post("/api/v1/bench/usb/connect")
 def connect_usb(request: UsbConnectRequest) -> dict:
     try:
+        app.state.bench.disconnect()
+        app.state.bench = UsbBench()
         app.state.bench.connect(request.port)
+    except (BenchError, OSError, ValueError) as error:
+        raise bench_error(error) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/simulator/connect")
+def connect_simulator(request: SimulatorConnectRequest) -> dict:
+    try:
+        app.state.bench.disconnect()
+        app.state.bench = TcpBench()
+        app.state.bench.connect("127.0.0.1", request.port)
     except (BenchError, OSError, ValueError) as error:
         raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
@@ -170,6 +187,11 @@ def connect_usb(request: UsbConnectRequest) -> dict:
 def disconnect_usb() -> dict:
     app.state.bench.disconnect()
     return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/disconnect")
+def disconnect_bench() -> dict:
+    return disconnect_usb()
 
 
 @app.post("/api/v1/bench/upload/{profile_id}")

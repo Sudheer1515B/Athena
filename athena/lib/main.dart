@@ -93,6 +93,11 @@ class _AthenaShellState extends State<AthenaShell> {
                           benchConnected:
                               widget.state.snapshot?.connectionState ==
                               'CONNECTED',
+                          transport: widget
+                              .state
+                              .snapshot
+                              ?.connection['transport']
+                              ?.toString(),
                           onUpload: widget.state.uploadProfile,
                         ),
                         _history(),
@@ -243,7 +248,11 @@ class _AthenaShellState extends State<AthenaShell> {
         connected
             ? (status?['state']?.toString() ?? 'Unknown')
             : 'Disconnected',
-        connected ? 'USB bench' : 'Connect in Settings',
+        connected
+            ? (snapshot?.connection['transport'] == 'SIMULATOR'
+                  ? 'Local simulator'
+                  : 'USB bench')
+            : 'Connect in Settings',
       ),
       _tile(
         'Cycles completed',
@@ -455,7 +464,7 @@ class _AthenaShellState extends State<AthenaShell> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'WDR Protocol v1 · USB serial · 115200 baud',
+          'WDR Protocol v1 · USB bench or local simulator',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
@@ -488,11 +497,23 @@ class _AthenaShellState extends State<AthenaShell> {
               onPressed:
                   widget.state.snapshot?.connectionState == 'CONNECTED' &&
                       !widget.state.loading
-                  ? widget.state.disconnectUsb
+                  ? widget.state.disconnectBench
                   : null,
               child: const Text('Disconnect'),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Simulator: run the supplied serve-sim tool on this Mac (TCP 3333).',
+          style: TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.tonal(
+          onPressed: widget.state.loading
+              ? null
+              : widget.state.connectSimulator,
+          child: const Text('Connect local simulator'),
         ),
         const SizedBox(height: 8),
         Text(

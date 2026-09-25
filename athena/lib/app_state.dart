@@ -63,7 +63,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> connectUsb(String port) => _operate(() => _api.connectUsb(port));
-  Future<void> disconnectUsb() => _operate(_api.disconnectUsb);
+  Future<void> connectSimulator() => _operate(_api.connectSimulator);
+  Future<void> disconnectBench() => _operate(_api.disconnectBench);
   Future<void> uploadProfile(String id) =>
       _operate(() => _api.uploadProfile(id));
   Future<void> control(String action, {int cycles = 1}) =>

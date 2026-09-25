@@ -1,8 +1,9 @@
-"""Small WDR v1 USB controller for the time-boxed bench prototype."""
+"""Small WDR v1 USB and local TCP controllers for the bench prototype."""
 
 from __future__ import annotations
 
 import re
+import socket
 import threading
 import time
 from collections import deque
@@ -26,6 +27,7 @@ class UsbBench:
         self.counters: dict[str, str] | None = None
         self.profile_id: str | None = None
         self.events: deque[str] = deque(maxlen=30)
+        self.transport = "USB"
 
     @property
     def connected(self) -> bool:
@@ -76,7 +78,7 @@ class UsbBench:
 
     def _line(self, deadline: float) -> str | None:
         if self._serial is None:
-            raise BenchError("USB bench is disconnected")
+            raise BenchError("Bench is disconnected")
         buffer = bytearray()
         while time.monotonic() < deadline:
             byte = self._serial.read(1)
@@ -96,7 +98,7 @@ class UsbBench:
     def command(self, value: str) -> str:
         with self._lock:
             if self._serial is None:
-                raise BenchError("USB bench is disconnected")
+                raise BenchError("Bench is disconnected")
             try:
                 self._serial.write((value + "\n").encode("ascii"))
                 self._serial.flush()
@@ -116,7 +118,7 @@ class UsbBench:
                 raise BenchError(f"No reply to {value.split()[0]} within 2 seconds")
             except (OSError, UnicodeError) as error:
                 self.disconnect()
-                raise BenchError(f"USB connection failed: {error}") from error
+                raise BenchError(f"Bench connection failed: {error}") from error
 
     def refresh(self) -> dict:
         with self._lock:
@@ -179,10 +181,62 @@ class UsbBench:
         with self._lock:
             return {
                 "connection": {"state": "CONNECTED" if self.connected else "DISCONNECTED",
-                               "transport": "USB" if self.connected else None,
+                               "transport": self.transport if self.connected else None,
                                "port": self.port, "bench": self.info},
                 "bench_state": self.status,
                 "counters": self.counters,
                 "profile": {"id": self.profile_id} if self.profile_id else None,
                 "recent_events": list(self.events),
             }
+
+
+class SocketStream:
+    """The same byte-stream operations used by UsbBench, backed by TCP."""
+
+    def __init__(self, sock: socket.socket) -> None:
+        self.sock = sock
+        self.is_open = True
+
+    def write(self, data: bytes) -> int:
+        self.sock.sendall(data)
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def read(self, amount: int) -> bytes:
+        try:
+            data = self.sock.recv(amount)
+        except socket.timeout:
+            return b""
+        if not data:
+            raise OSError("Simulator TCP connection closed")
+        return data
+
+    def close(self) -> None:
+        self.is_open = False
+        self.sock.close()
+
+
+class TcpBench(UsbBench):
+    """WDR simulator on loopback TCP, reusing the proven command scheduler."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.transport = "SIMULATOR"
+
+    def connect(self, host: str = "127.0.0.1", port: int = 3333) -> None:
+        with self._lock:
+            self.disconnect()
+            sock = socket.create_connection((host, port), timeout=3.0)
+            sock.settimeout(0.05)
+            self._serial = SocketStream(sock)
+            self.port = f"{host}:{port}"
+            try:
+                self.command("PING")
+                self.refresh()
+                if (self.info or {}).get("team") != "SIM":
+                    raise BenchError("Connected TCP service is not the supplied WDR simulator")
+            except Exception:
+                self.disconnect()
+                raise

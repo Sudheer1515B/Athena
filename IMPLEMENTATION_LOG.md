@@ -6,9 +6,9 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 
 ## Current status
 
-**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV through Flutter and FastAPI, persists originals and immutable profiles, previews traces and exports compiled CSV. Bench TCP connection and controls begin in M3.
+**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB and local-simulator adapters can upload a profile and run finite cycles. The supplied simulator completed one full Athena API replay; finish the browser demo and remaining recovery/history work before marking later milestones complete.
 
-**Artifact review and official-tool baseline: COMPLETE.** The official simulator is now available. No replacement simulator is needed or planned. Both in-process and real TCP conformance runs passed. These results assess the supplied simulator/tool, not an implemented Athena controller.
+**Artifact review and official-tool baseline: COMPLETE.** The official simulator is available. No replacement simulator is needed. The original tool conformance runs passed, and Athena now connects to its real TCP service.
 
 ## Milestone tracker
 
@@ -17,12 +17,12 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
 | M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
 | M2 | CSV importer and deterministic compiler | Complete | Golden case and API persistence/export pass; Flutter analyze/tests/build pass |
-| M3 | WDR adapter, uploads and operations | Not started | No Athena socket client exists |
-| M4 | First browser-to-simulator workflow | Not started | Planned 40–44 s source window |
-| M5 | Controls, recovery, accounting | Not started | Plan specifies failure handling |
-| M6 | History/filtering/charts/CSV | Not started | No local application database yet |
-| M7 | PDF, finish estimate, production build/README/demo | Not started | No report implementation or build |
-| M8 | Venue hardware verification | Not started | No physical bench tested |
+| M3 | WDR adapter, uploads and operations | In progress | USB and loopback TCP simulator adapters, upload/checksum and finite controls work; final Wi-Fi transport remains |
+| M4 | First browser-to-simulator workflow | In progress | Full 40–44 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
+| M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop and live bench counters exist; recovery and durable accounting remain |
+| M6 | History/filtering/charts/CSV | Not started | SQLite stores source/profile records; run history and reports remain |
+| M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and simulator demo runbook exist; report/estimate and final polish remain |
+| M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; compiled-profile replay on real bench remains intentionally unperformed |
 
 ## Entry 001 — 25 September 2026 — Inspection and planning only
 
@@ -218,17 +218,6 @@ The user prioritized an immediate prototype and chose USB control before Wi-Fi. 
 - The new Athena USB connection/read path was exercised against the physical ESP32; upload/playback has not. A physical run requires the user to verify separate 5–6 V servo power, common ground and mechanical clearance, then explicitly click the upload/start controls. The current backend stores neither run history nor counter snapshots; it only displays current board totals.
 - Wi-Fi can be addressed after this prototype. The supplied firmware is fixed to the event network and WDR v1 exposes no runtime SSID/password command. The Mac can join the board's network, or an access point can use the configured credentials, without changing firmware.
 
-## Future entry template
-## Entry 006 — 25 September 2026 — Four physical PWM paths verified without profile loss
-
-- Both boards were powered from separate Mac USB ports, with four signal jumpers and one ground jumper; no servos were attached.
-- Read-only receiver output at bench idle showed OUT0–OUT3 around `1499–1500us/20000us`, with pulse counts increasing.
-- The proposed flight-profile upload was stopped before execution when the user asked what it would replace. A read-only `STATUS` confirmed the original 100-frame profile and all lifetime counters were still present.
-- With the user's explicit no-loss constraint, sent only `SET 0 1100`, `SET 1 1300`, `SET 2 1700`, `SET 3 1900`, then `STOP`. The independent receiver measured `1100,1297,1694,1891` µs respectively, each with a 20,000 µs period. After STOP, all live outputs were 1500 µs, profile length remained 100, and counters remained `cycles=21 run_s=24 active_s=23,23,23,6`.
-- Replaced an unexecuted upload-and-replay demo script with `pwm_receiver/check_pwm.py`, which performs only the reversible `SET`/`STOP` check with port-identity guards. No `LOAD`, `COMMIT`, `START`, `CLEAR`, or firmware flash occurred during this check.
-- A full log-profile replay would replace the bench's committed profile because WDR v1 has no readback command. It remains unperformed pending the user's decision about that loss.
-
-## Future entry template
 ## Entry 005 — 25 September 2026 — Independent PWM receiver programmed
 
 ### Device identification
@@ -247,6 +236,37 @@ The user prioritized an immediate prototype and chose USB control before Wi-Fi. 
 ### Next physical step
 
 With USB unplugged, wire bench OUT0 GPIO25 → receiver GPIO32, OUT1 GPIO26 → receiver GPIO33, OUT2 GPIO27 → receiver GPIO34, OUT3 GPIO33 → receiver GPIO35, and GND → GND. Reconnect both USB cables to the Mac. Do not join 3V3/5V rails or attach servos for the first signal-only check. Open `/dev/cu.usbserial-10` at 115200 in a terminal; keep Athena on `/dev/cu.usbserial-0001`. Verify idle near 1500 µs HIGH and ~20,000 µs period, then replay one finite profile cycle.
+
+## Entry 006 — 25 September 2026 — Four physical PWM paths verified without profile loss
+
+- Both boards were powered from separate Mac USB ports, with four signal jumpers and one ground jumper; no servos were attached.
+- Read-only receiver output at bench idle showed OUT0–OUT3 around `1499–1500us/20000us`, with pulse counts increasing.
+- The proposed flight-profile upload was stopped before execution when the user asked what it would replace. A read-only `STATUS` confirmed the original 100-frame profile and all lifetime counters were still present.
+- With the user's explicit no-loss constraint, sent only `SET 0 1100`, `SET 1 1300`, `SET 2 1700`, `SET 3 1900`, then `STOP`. The independent receiver measured `1100,1297,1694,1891` µs respectively, each with a 20,000 µs period. After STOP, all live outputs were 1500 µs, profile length remained 100, and counters remained `cycles=21 run_s=24 active_s=23,23,23,6`.
+- Replaced an unexecuted upload-and-replay demo script with `pwm_receiver/check_pwm.py`, which performs only the reversible `SET`/`STOP` check with port-identity guards. No `LOAD`, `COMMIT`, `START`, `CLEAR`, or firmware flash occurred during this check.
+- A full log-profile replay would replace the bench's committed profile because WDR v1 has no readback command. It remains unperformed pending the user's decision about that loss.
+
+## Entry 007 — 25 September 2026 — Supplied simulator becomes the primary prototype demo
+
+### Reason and scope
+
+The supplied `serve-sim` process already exposes WDR v1 over local TCP. It supports a full log-to-profile-to-replay demonstration without replacing the real bench's existing 100-frame profile. The two-ESP wiring remains an optional, independent proof of physical PWM output.
+
+### Changes made
+
+- Added a loopback-only TCP transport to the existing serialized WDR controller. It checks the live `INFO` response for `team=SIM` and reuses the same upload, checksum and finite-cycle control code as USB.
+- Added simulator connect and general disconnect API routes, plus **Connect local simulator** in Flutter Settings. Profile upload names the active target, and Dashboard identifies simulator versus USB.
+- Made `PROTOTYPE_DEMO.md` a simulator-first two-minute runbook and documented how to start both local services.
+
+### Verification
+
+- Started the organizer's actual `handout_controller_teams/wdr_tool.py serve-sim` on isolated loopback ports 43333/43334 and an isolated temporary counter directory.
+- Exercised Athena's API end to end against that simulator: imported supplied `RCOU.csv`, compiled C1–C4 from 40–44 s at 50 Hz, produced 200 frames/SUM16 **16982**, uploaded and checksum-verified the profile, then started one finite cycle. Simulator reported STOPPED with `cycles=1 run_s=4 active_s=4,4,4,4` on the fresh instance.
+- Backend unit tests: 10/10 pass. Flutter widget tests: 2/2 pass. `flutter analyze`: no issues. `flutter build web`: success. Neither physical ESP32 was contacted during this integration test.
+
+### Limits
+
+The simulator proves protocol and app integration, not electrical output or actual servo wear. The earlier independent receiver check supplies the separate four-channel PWM evidence. Real Wi-Fi control, 16-channel hardware, durable per-run history and real-bench replay of this compiled profile remain outside this prototype slice. The original real-bench profile and counters were preserved.
 
 ## Future entry template
 
