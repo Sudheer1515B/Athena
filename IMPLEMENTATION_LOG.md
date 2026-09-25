@@ -192,6 +192,32 @@ M3 owns the real TCP connection, capability reconciliation, serialized commands 
 
 The new manuals say `serve-sim` behaves like the real bench and that committed profiles survive power loss, but the supplied simulator's `_do_reboot` clears `profile` and `profile_len`. Real-firmware behavior takes precedence for product semantics; simulator behavior remains the integration-test expectation.
 
+## Entry 004 — 25 September 2026 — Time-boxed USB prototype path
+
+### Authorization and scope
+
+The user prioritized an immediate prototype and chose USB control before Wi-Fi. The fixed ESP32 firmware was already connected to this Mac. This is a USB prototype slice of M3; it does not satisfy the final challenge's Wi-Fi transport requirement.
+
+### Hardware evidence before implementation
+
+- The USB device is `/dev/cu.usbserial-0001`. A read-only 115200-baud probe received `OK PONG`, `INFO proto=1 team=WDR_REFERENCE ch=4 maxframes=8000`, and `STATUS state=STOPPED ... us=1500,1500,1500,1500`.
+- The real bench reported lifetime `cycles=21 run_s=24 active_s=23,23,23,6`. Those counters predate Athena and must not be cleared or presented as new prototype output.
+- No profile upload, `START`, or physical PWM motion was performed during this verification. The board had a pre-existing 100-frame profile.
+- A later read-only `UsbBench.connect()` check reached the physical board and returned the same counters and STOPPED state. It also observed `EVT BOOT` and `up=1`: opening this Mac's USB serial port appears to reset the ESP32 despite pre-setting DTR/RTS low. The committed 100-frame profile and lifetime counters survived. Connect only when an automatic stop/reset is acceptable; do not use reconnection as a running-session recovery mechanism until this is resolved.
+
+### Changes made
+
+- Added `UsbBench`, a serialized WDR v1 command transport using pyserial at 115200 baud. It avoids deliberate DTR/RTS reset, ignores debug text, captures events, reads live `INFO`/`STATUS`/`COUNTERS`, checks channel count, frame limit, pulse range and SUM16, and uploads only a fully compiled stored profile. It refuses `START` until this backend session has verified an upload; start always has a finite target.
+- Added local USB connect/disconnect, upload, start/pause/resume/stop API endpoints. `CLEAR` is intentionally not exposed.
+- Wired Settings to the Mac's USB port, Profile to upload, and Dashboard to bench state, lifetime counters, per-channel active hours, finite-cycle controls and recent events. The browser polls authoritative bench snapshots every second.
+- Added `pyserial==3.5` to backend requirements and updated the local run instructions.
+
+### Verification and remaining work
+
+- Protocol fake-serial tests cover interleaved events/debug text, ordered frame upload, checksum gating and finite start. Backend suite: 10/10 pass. Flutter widget tests: 2/2 pass. `flutter analyze`: no issues. `flutter build web`: success.
+- The new Athena USB connection/read path was exercised against the physical ESP32; upload/playback has not. A physical run requires the user to verify separate 5–6 V servo power, common ground and mechanical clearance, then explicitly click the upload/start controls. The current backend stores neither run history nor counter snapshots; it only displays current board totals.
+- Wi-Fi can be addressed after this prototype. The supplied firmware is fixed to the event network and WDR v1 exposes no runtime SSID/password command. The Mac can join the board's network, or an access point can use the configured credentials, without changing firmware.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

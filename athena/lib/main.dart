@@ -57,6 +57,13 @@ class AthenaShell extends StatefulWidget {
 
 class _AthenaShellState extends State<AthenaShell> {
   AthenaPage page = AthenaPage.dashboard;
+  final usbPort = TextEditingController(text: '/dev/cu.usbserial-0001');
+
+  @override
+  void dispose() {
+    usbPort.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -65,6 +72,11 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: _banner(widget.state.error!),
+            ),
           Expanded(
             child: SingleChildScrollView(
               child: Center(
@@ -72,10 +84,21 @@ class _AthenaShellState extends State<AthenaShell> {
                   constraints: const BoxConstraints(maxWidth: 1440),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: IndexedStack(index: page.index, children: [
-                      _dashboard(), ProfilePage(api: widget.state.api),
-                      _history(), _settings(),
-                    ]),
+                    child: IndexedStack(
+                      index: page.index,
+                      children: [
+                        _dashboard(),
+                        ProfilePage(
+                          api: widget.state.api,
+                          benchConnected:
+                              widget.state.snapshot?.connectionState ==
+                              'CONNECTED',
+                          onUpload: widget.state.uploadProfile,
+                        ),
+                        _history(),
+                        _settings(),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -114,7 +137,7 @@ class _AthenaShellState extends State<AthenaShell> {
           for (final item in AthenaPage.values) _navItem(item),
           const Spacer(),
           if (widget.state.error != null)
-            _chip('SERVICE OFFLINE', Palette.critical)
+            _chip('CHECK MESSAGE', Palette.critical)
           else
             _chip(
               connected ? 'BENCH CONNECTED' : 'BENCH DISCONNECTED',
@@ -173,10 +196,6 @@ class _AthenaShellState extends State<AthenaShell> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.state.error != null) ...[
-          _banner(widget.state.error!),
-          const SizedBox(height: 18),
-        ],
         _tiles(isNarrow),
         const SizedBox(height: 18),
         if (isNarrow)
@@ -195,24 +214,52 @@ class _AthenaShellState extends State<AthenaShell> {
         const SizedBox(height: 18),
         BenchCard(
           title: 'Recent events',
-          child: _empty('Events will appear when a bench session is recorded.'),
+          child: widget.state.snapshot?.recentEvents.isNotEmpty == true
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final event in widget.state.snapshot!.recentEvents)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(event),
+                      ),
+                  ],
+                )
+              : _empty('No events received yet.'),
         ),
       ],
     );
   }
 
   Widget _tiles(bool narrow) {
+    final snapshot = widget.state.snapshot;
+    final status = snapshot?.benchState;
+    final counters = snapshot?.counters;
+    final connected = snapshot?.connectionState == 'CONNECTED';
+    final runSeconds = int.tryParse(counters?['run_s']?.toString() ?? '');
     final tiles = [
       _tile(
         'Run state',
-        widget.state.snapshot?.connectionState == 'CONNECTED'
-            ? 'Unknown'
+        connected
+            ? (status?['state']?.toString() ?? 'Unknown')
             : 'Disconnected',
-        'No live bench state yet',
+        connected ? 'USB bench' : 'Connect in Settings',
       ),
-      _tile('Cycles completed', '—', 'Connect a bench for counters'),
-      _tile('Current cycle', '—', 'No profile is running'),
-      _tile('Total bench hours', '—', 'Reported by the bench'),
+      _tile(
+        'Cycles completed',
+        counters?['cycles']?.toString() ?? '—',
+        'Lifetime bench total',
+      ),
+      _tile(
+        'Current cycle',
+        status?['cycle']?.toString() ?? '—',
+        'Current run',
+      ),
+      _tile(
+        'Total bench hours',
+        runSeconds == null ? '—' : (runSeconds / 3600).toStringAsFixed(3),
+        'RUNNING time from bench',
+      ),
     ];
     if (narrow) {
       return Wrap(
@@ -260,24 +307,56 @@ class _AthenaShellState extends State<AthenaShell> {
     ),
   );
 
-  Widget _channels() => BenchCard(
-    title: 'Channels',
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Row(
-          children: [
-            Expanded(child: HeaderLabel('NAME')),
-            SizedBox(width: 76, child: HeaderLabel('LIVE µs')),
-            SizedBox(width: 72, child: HeaderLabel('IDLE µs')),
-            SizedBox(width: 66, child: HeaderLabel('ACTIVE h')),
-          ],
-        ),
-        const Divider(color: Palette.line),
-        _empty('Connect a bench to view its reported channels.'),
-      ],
-    ),
-  );
+  Widget _channels() {
+    final snapshot = widget.state.snapshot;
+    final live = snapshot?.benchState?['us']?.toString().split(',') ?? [];
+    final active = snapshot?.counters?['active_s']?.toString().split(',') ?? [];
+    return BenchCard(
+      title: 'Channels',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Expanded(child: HeaderLabel('NAME')),
+              SizedBox(width: 76, child: HeaderLabel('LIVE µs')),
+              SizedBox(width: 72, child: HeaderLabel('IDLE µs')),
+              SizedBox(width: 66, child: HeaderLabel('ACTIVE h')),
+            ],
+          ),
+          const Divider(color: Palette.line),
+          if (live.isEmpty)
+            _empty('Connect a bench to view its reported channels.')
+          else
+            for (var i = 0; i < live.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'OUT$i',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    SizedBox(width: 76, child: Text(live[i])),
+                    const SizedBox(width: 72, child: Text('1500')),
+                    SizedBox(
+                      width: 66,
+                      child: Text(
+                        i < active.length
+                            ? ((int.tryParse(active[i]) ?? 0) / 3600)
+                                  .toStringAsFixed(3)
+                            : '—',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
 
   Widget _rightColumn() => Column(
     children: [
@@ -290,18 +369,47 @@ class _AthenaShellState extends State<AthenaShell> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                FilledButton(onPressed: null, child: const Text('▶ Start')),
-                OutlinedButton(onPressed: null, child: const Text('Ⅱ Pause')),
-                FilledButton(onPressed: null, child: const Text('■ Stop')),
+                FilledButton(
+                  onPressed:
+                      widget.state.loading ||
+                          widget.state.snapshot?.profile == null ||
+                          widget.state.snapshot?.benchState?['state'] !=
+                              'STOPPED'
+                      ? null
+                      : () => widget.state.control('start', cycles: 1),
+                  child: const Text('▶ Start 1 cycle'),
+                ),
                 OutlinedButton(
-                  onPressed: null,
-                  child: const Text('Reset counters…'),
+                  onPressed:
+                      widget.state.loading ||
+                          widget.state.snapshot?.benchState?['state'] !=
+                              'RUNNING'
+                      ? null
+                      : () => widget.state.control('pause'),
+                  child: const Text('Ⅱ Pause'),
+                ),
+                OutlinedButton(
+                  onPressed:
+                      widget.state.loading ||
+                          widget.state.snapshot?.benchState?['state'] !=
+                              'PAUSED'
+                      ? null
+                      : () => widget.state.control('resume'),
+                  child: const Text('▶ Resume'),
+                ),
+                FilledButton(
+                  onPressed:
+                      widget.state.loading ||
+                          widget.state.snapshot?.connectionState != 'CONNECTED'
+                      ? null
+                      : () => widget.state.control('stop'),
+                  child: const Text('■ Stop'),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             const Text(
-              'Controls become available after bench integration.',
+              'Upload a compiled profile, then start a finite cycle. Verify actuator power, common ground and mechanical clearance first.',
               style: TextStyle(color: Palette.muted, fontSize: 12.5),
             ),
           ],
@@ -347,13 +455,54 @@ class _AthenaShellState extends State<AthenaShell> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'WDR Protocol v1 · TCP port 3333',
+          'WDR Protocol v1 · USB serial · 115200 baud',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         const Text(
-          'Connection setup arrives with the bench transport milestone.',
+          'ESP32 USB port on this Mac',
           style: TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 330,
+          child: TextField(
+            controller: usbPort,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(
+              onPressed: widget.state.loading
+                  ? null
+                  : () => widget.state.connectUsb(usbPort.text.trim()),
+              child: const Text('Connect USB bench'),
+            ),
+            OutlinedButton(
+              onPressed:
+                  widget.state.snapshot?.connectionState == 'CONNECTED' &&
+                      !widget.state.loading
+                  ? widget.state.disconnectUsb
+                  : null,
+              child: const Text('Disconnect'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Bench: ${widget.state.snapshot?.connection['bench'] ?? 'not connected'}',
+          style: const TextStyle(color: Palette.secondary),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Opening USB has reset this ESP32 during testing. Connect only when stopping the bench is safe.',
+          style: TextStyle(color: Palette.critical, fontSize: 12.5),
         ),
         const SizedBox(height: 12),
         Text(

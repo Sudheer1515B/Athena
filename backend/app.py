@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .profiles import MAX_SOURCE_BYTES, ProfileIssue, compile_profile, inspect_csv
+from .bench_usb import BenchError, UsbBench
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,9 +32,11 @@ def utc_now() -> str:
 async def lifespan(app: FastAPI):
     app.state.database = open_database(DATA_DIR / "athena.sqlite3")
     app.state.instance_id = str(uuid4())
+    app.state.bench = UsbBench()
     try:
         yield
     finally:
+        app.state.bench.disconnect()
         app.state.database.close()
 
 
@@ -57,6 +60,18 @@ class CompileRequest(BaseModel):
     channel_count: int = Field(ge=1, le=16)
     maxframes: int = Field(ge=1)
     mapping: list[MappingEntry]
+
+
+class UsbConnectRequest(BaseModel):
+    port: str = Field(min_length=1)
+
+
+class StartRequest(BaseModel):
+    cycles: int = Field(ge=1, le=100000)
+
+
+def bench_error(error: Exception) -> HTTPException:
+    return HTTPException(status_code=409, detail=str(error))
 
 
 def issue_response(error: ProfileIssue) -> HTTPException:
@@ -102,16 +117,19 @@ def profile_response(row: sqlite3.Row) -> dict:
 
 
 def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
+    bench = getattr(app.state, "bench", None)
+    live = bench.snapshot() if bench is not None else {}
     return {
         "api_version": 1,
         "server_instance_id": instance_id,
         "observed_at": utc_now(),
-        "connection": {"state": "DISCONNECTED", "bench": None},
-        "bench_state": None,
-        "profile": None,
+        "connection": live.get("connection", {"state": "DISCONNECTED", "bench": None}),
+        "bench_state": live.get("bench_state"),
+        "profile": live.get("profile"),
         "session": None,
-        "counters": None,
+        "counters": live.get("counters"),
         "operation": None,
+        "recent_events": live.get("recent_events", []),
         "history_counts": database_summary(connection),
     }
 
@@ -130,6 +148,58 @@ def health() -> dict:
 
 @app.get("/api/v1/snapshot")
 def snapshot() -> dict:
+    bench = getattr(app.state, "bench", None)
+    if bench is not None and bench.connected:
+        try:
+            bench.refresh()
+        except BenchError as error:
+            raise HTTPException(status_code=503, detail=f"USB bench did not respond: {error}") from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/usb/connect")
+def connect_usb(request: UsbConnectRequest) -> dict:
+    try:
+        app.state.bench.connect(request.port)
+    except (BenchError, OSError, ValueError) as error:
+        raise bench_error(error) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/usb/disconnect")
+def disconnect_usb() -> dict:
+    app.state.bench.disconnect()
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/upload/{profile_id}")
+def upload_to_bench(profile_id: str) -> dict:
+    row = profile_row(profile_id)
+    canonical = json.loads(row["canonical_json"])
+    try:
+        app.state.bench.upload(profile_id, canonical, row["sum16"])
+    except (BenchError, OSError) as error:
+        raise bench_error(error) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/start")
+def start_bench(request: StartRequest) -> dict:
+    try:
+        app.state.bench.control("start", request.cycles)
+    except BenchError as error:
+        raise bench_error(error) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/{action}")
+def control_bench(action: str) -> dict:
+    if action not in {"pause", "resume", "stop"}:
+        raise HTTPException(status_code=404, detail="Unknown bench control")
+    try:
+        app.state.bench.control(action)
+    except BenchError as error:
+        raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
 
 

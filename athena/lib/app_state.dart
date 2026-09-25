@@ -17,7 +17,9 @@ class AppState extends ChangeNotifier {
   WebSocketChannel? _live;
   StreamSubscription<dynamic>? _subscription;
   Timer? _retry;
+  Timer? _poll;
   bool _disposed = false;
+  bool _refreshing = false;
 
   Future<void> connect() async {
     if (_disposed) return;
@@ -29,9 +31,55 @@ class AppState extends ChangeNotifier {
       error = null;
       notifyListeners();
       _openLive();
+      _poll ??= Timer.periodic(const Duration(seconds: 1), (_) => refresh());
     } catch (_) {
       error = 'Athena service is unavailable. Start the local backend.';
       _scheduleRetry();
+    } finally {
+      loading = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> refresh() async {
+    if (_disposed || loading || _refreshing) return;
+    _refreshing = true;
+    try {
+      snapshot = await _api.fetchSnapshot();
+      if (error?.startsWith('Athena service is unavailable') == true ||
+          error?.startsWith('USB bench did not respond') == true) {
+        error = null;
+      }
+      if (!_disposed) notifyListeners();
+    } catch (caught) {
+      error = caught.toString().replaceFirst(
+        RegExp(r'^(Bad state|Exception): '),
+        '',
+      );
+      if (!_disposed) notifyListeners();
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  Future<void> connectUsb(String port) => _operate(() => _api.connectUsb(port));
+  Future<void> disconnectUsb() => _operate(_api.disconnectUsb);
+  Future<void> uploadProfile(String id) =>
+      _operate(() => _api.uploadProfile(id));
+  Future<void> control(String action, {int cycles = 1}) =>
+      _operate(() => _api.control(action, cycles: cycles));
+
+  Future<void> _operate(Future<BenchSnapshot> Function() operation) async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      snapshot = await operation();
+    } catch (caught) {
+      error = caught.toString().replaceFirst(
+        RegExp(r'^(Bad state|Exception): '),
+        '',
+      );
     } finally {
       loading = false;
       if (!_disposed) notifyListeners();
@@ -81,6 +129,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _retry?.cancel();
+    _poll?.cancel();
     _subscription?.cancel();
     _live?.sink.close();
     _api.close();

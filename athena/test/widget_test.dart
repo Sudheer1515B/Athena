@@ -20,7 +20,7 @@ void main() {
         findsOneWidget,
       );
       final start = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, '▶ Start'),
+        find.widgetWithText(FilledButton, '▶ Start 1 cycle'),
       );
       expect(start.onPressed, isNull);
       expect(find.text('127'), findsNothing);

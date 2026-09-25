@@ -8,8 +8,15 @@ import 'bench_api.dart';
 import 'theme.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key, required this.api});
+  const ProfilePage({
+    super.key,
+    required this.api,
+    required this.benchConnected,
+    required this.onUpload,
+  });
   final BenchApi api;
+  final bool benchConnected;
+  final Future<void> Function(String) onUpload;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -36,30 +43,42 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> restoreRecent() async {
     try {
       final result = await Future.wait([
-        widget.api.recentSources(), widget.api.recentProfiles(),
+        widget.api.recentSources(),
+        widget.api.recentProfiles(),
       ]);
       if (!mounted) return;
       final sourceItems = result[0]['items'] as List;
       final profileItems = result[1]['items'] as List;
       if (sourceItems.isEmpty) return;
       final latest = Map<String, dynamic>.from(sourceItems.first as Map);
-      final saved = profileItems.isNotEmpty &&
-          (profileItems.first as Map)['source_id'] == latest['id']
-          ? Map<String, dynamic>.from(profileItems.first as Map) : null;
+      final saved =
+          profileItems.isNotEmpty &&
+              (profileItems.first as Map)['source_id'] == latest['id']
+          ? Map<String, dynamic>.from(profileItems.first as Map)
+          : null;
       final sourceColumns = ((latest['inspection'] as Map)['columns'] as List)
-          .map((value) => value.toString()).toList();
-      final duration = ((latest['inspection'] as Map)['duration_us'] as num).toDouble() / 1000000;
+          .map((value) => value.toString())
+          .toList();
+      final duration =
+          ((latest['inspection'] as Map)['duration_us'] as num).toDouble() /
+          1000000;
       setState(() {
         source = latest;
         profile = saved;
         if (saved != null) {
           final settings = saved['settings'] as Map;
-          startController.text = _decimal((settings['start_us'] as num).toDouble() / 1000000);
-          endController.text = _decimal((settings['end_us'] as num).toDouble() / 1000000);
+          startController.text = _decimal(
+            (settings['start_us'] as num).toDouble() / 1000000,
+          );
+          endController.text = _decimal(
+            (settings['end_us'] as num).toDouble() / 1000000,
+          );
           rateController.text = settings['rate_hz'].toString();
           final map = settings['mapping'] as List;
           for (var i = 0; i < outputs.length; i++) {
-            outputs[i] = i < map.length ? (map[i] as Map)['source']?.toString() : null;
+            outputs[i] = i < map.length
+                ? (map[i] as Map)['source']?.toString()
+                : null;
           }
         } else {
           startController.text = '0';
@@ -71,12 +90,20 @@ class _ProfilePageState extends State<ProfilePage> {
       });
       if (saved != null) {
         final traces = await Future.wait([
-          widget.api.sourcePreview(latest['id'].toString(), outputs.whereType<String>().toList(),
-              (saved['settings'] as Map)['start_us'] as int,
-              (saved['settings'] as Map)['end_us'] as int),
+          widget.api.sourcePreview(
+            latest['id'].toString(),
+            outputs.whereType<String>().toList(),
+            (saved['settings'] as Map)['start_us'] as int,
+            (saved['settings'] as Map)['end_us'] as int,
+          ),
           widget.api.profilePreview(saved['id'].toString()),
         ]);
-        if (mounted) setState(() { sourceTrace = traces[0]; profileTrace = traces[1]; });
+        if (mounted) {
+          setState(() {
+            sourceTrace = traces[0];
+            profileTrace = traces[1];
+          });
+        }
       }
     } catch (_) {
       // The shell reports service availability; absence of recent drafts is harmless.
@@ -525,11 +552,20 @@ class _ProfilePageState extends State<ProfilePage> {
             label: const Text('Export compiled CSV'),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Bench upload becomes available after live connection '
-            'and capability verification.',
-            style: TextStyle(color: Palette.muted, fontSize: 12.5),
+          FilledButton.icon(
+            onPressed: busy || !widget.benchConnected
+                ? null
+                : () => widget.onUpload(profile!['id'].toString()),
+            icon: const Icon(Icons.upload, size: 18),
+            label: const Text('Upload to USB bench'),
           ),
+          if (!widget.benchConnected) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Connect the USB bench in Settings first.',
+              style: TextStyle(color: Palette.muted, fontSize: 12.5),
+            ),
+          ],
         ],
       ],
     ),

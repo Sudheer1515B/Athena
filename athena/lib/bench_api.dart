@@ -9,11 +9,21 @@ class BenchSnapshot {
     required this.connectionState,
     required this.observedAt,
     required this.historyCounts,
+    required this.connection,
+    required this.benchState,
+    required this.counters,
+    required this.profile,
+    required this.recentEvents,
   });
 
   final String connectionState;
   final DateTime? observedAt;
   final Map<String, int> historyCounts;
+  final Map<String, dynamic> connection;
+  final Map<String, dynamic>? benchState;
+  final Map<String, dynamic>? counters;
+  final Map<String, dynamic>? profile;
+  final List<String> recentEvents;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
     final connection = json['connection'];
@@ -28,6 +38,21 @@ class BenchSnapshot {
               (key, value) => MapEntry(key.toString(), (value as num).toInt()),
             )
           : const {},
+      connection: connection is Map
+          ? Map<String, dynamic>.from(connection)
+          : const {},
+      benchState: json['bench_state'] is Map
+          ? Map<String, dynamic>.from(json['bench_state'] as Map)
+          : null,
+      counters: json['counters'] is Map
+          ? Map<String, dynamic>.from(json['counters'] as Map)
+          : null,
+      profile: json['profile'] is Map
+          ? Map<String, dynamic>.from(json['profile'] as Map)
+          : null,
+      recentEvents: (json['recent_events'] as List? ?? const [])
+          .map((event) => event.toString())
+          .toList(),
     );
   }
 }
@@ -48,12 +73,7 @@ class BenchApi {
 
   Future<BenchSnapshot> fetchSnapshot() async {
     final response = await _client.get(endpoint('snapshot'));
-    if (response.statusCode != 200) {
-      throw StateError('Snapshot request failed (${response.statusCode})');
-    }
-    return BenchSnapshot.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return BenchSnapshot.fromJson(_decodeObject(response));
   }
 
   Future<Map<String, dynamic>> importSource(
@@ -106,6 +126,36 @@ class BenchApi {
 
   Future<Map<String, dynamic>> recentProfiles() async =>
       _decodeObject(await _client.get(endpoint('profiles')));
+
+  Future<BenchSnapshot> connectUsb(String port) async => BenchSnapshot.fromJson(
+    _decodeObject(
+      await _client.post(
+        endpoint('bench/usb/connect'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'port': port}),
+      ),
+    ),
+  );
+
+  Future<BenchSnapshot> disconnectUsb() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('bench/usb/disconnect'))),
+  );
+
+  Future<BenchSnapshot> uploadProfile(String profileId) async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(await _client.post(endpoint('bench/upload/$profileId'))),
+      );
+
+  Future<BenchSnapshot> control(String action, {int cycles = 1}) async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(
+          await _client.post(
+            endpoint('bench/$action'),
+            headers: {'Content-Type': 'application/json'},
+            body: action == 'start' ? jsonEncode({'cycles': cycles}) : null,
+          ),
+        ),
+      );
 
   Uri profileExportUri(String profileId) =>
       endpoint('profiles/$profileId/export.csv');
