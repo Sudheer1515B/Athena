@@ -12,6 +12,7 @@ class ProfilePage extends StatefulWidget {
     super.key,
     required this.api,
     required this.benchConnected,
+    required this.benchBusy,
     required this.transport,
     required this.benchChannelCount,
     required this.benchMaxFrames,
@@ -19,6 +20,7 @@ class ProfilePage extends StatefulWidget {
   });
   final BenchApi api;
   final bool benchConnected;
+  final bool benchBusy;
   final String? transport;
   final int benchChannelCount;
   final int benchMaxFrames;
@@ -39,6 +41,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic>? profileTrace;
   String? error;
   bool busy = false;
+  bool uploading = false;
 
   @override
   void initState() {
@@ -250,6 +253,16 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) setState(() => error = _friendly(caught));
     } finally {
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> uploadCompiledProfile() async {
+    if (uploading || profile == null) return;
+    setState(() => uploading = true);
+    try {
+      await widget.onUpload(profile!['id'].toString());
+    } finally {
+      if (mounted) setState(() => uploading = false);
     }
   }
 
@@ -593,9 +606,10 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: busy || !widget.benchConnected
+            onPressed:
+                busy || uploading || widget.benchBusy || !widget.benchConnected
                 ? null
-                : () => widget.onUpload(profile!['id'].toString()),
+                : uploadCompiledProfile,
             icon: const Icon(Icons.upload, size: 18),
             label: Text(switch (widget.transport) {
               'SIMULATOR' => 'Upload to simulator',

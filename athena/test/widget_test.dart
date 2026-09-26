@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:athena/app_state.dart';
@@ -146,6 +147,17 @@ class FakeHistoryApi extends BenchApi {
           'has_link_gap': false,
           'counter_epoch_changed': false,
         };
+}
+
+class BlockingUploadApi extends BenchApi {
+  final pending = Completer<BenchSnapshot>();
+  int uploadCalls = 0;
+
+  @override
+  Future<BenchSnapshot> uploadProfile(String profileId) {
+    uploadCalls++;
+    return pending.future;
+  }
 }
 
 void main() {
@@ -356,4 +368,25 @@ void main() {
     expect(find.text('SETTINGS'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'AppState ignores a second command while an upload is pending',
+    () async {
+      final api = BlockingUploadApi();
+      final state = AppState(api: api);
+      final first = state.uploadProfile('profile-one');
+      final second = state.uploadProfile('profile-two');
+      expect(api.uploadCalls, 1);
+      expect(state.loading, isTrue);
+      api.pending.complete(
+        BenchSnapshot.fromJson({
+          'connection': {'state': 'CONNECTED'},
+          'history_counts': <String, int>{},
+        }),
+      );
+      await Future.wait([first, second]);
+      expect(state.loading, isFalse);
+      state.dispose();
+    },
+  );
 }

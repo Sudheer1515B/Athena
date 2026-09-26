@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 import tempfile
 import unittest
 from pathlib import Path
@@ -143,6 +144,7 @@ class ProfileTests(unittest.TestCase):
                 application.state.data_dir = Path(directory)
                 application.state.database = open_database(Path(directory) / "db.sqlite3")
                 application.state.instance_id = "profile-test"
+                application.state.upload_lock = threading.Lock()
                 try:
                     yield
                 finally:
@@ -164,6 +166,14 @@ class ProfileTests(unittest.TestCase):
                     created = client.post("/api/v1/profiles", json=request)
                     self.assertEqual(created.status_code, 201, created.text)
                     profile_id = created.json()["id"]
+                    application_lock = app.state.upload_lock
+                    application_lock.acquire()
+                    try:
+                        duplicate = client.post(f"/api/v1/bench/upload/{profile_id}")
+                        self.assertEqual(duplicate.status_code, 409)
+                        self.assertIn("already in progress", duplicate.json()["detail"])
+                    finally:
+                        application_lock.release()
                     self.assertEqual(created.json()["summary"]["sum16"], 16982)
                     self.assertEqual(client.get("/api/v1/sources").json()["items"][0]["id"], source_id)
                     self.assertEqual(client.get("/api/v1/profiles").json()["items"][0]["id"], profile_id)

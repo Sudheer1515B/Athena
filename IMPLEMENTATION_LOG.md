@@ -329,6 +329,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - The simulator launcher also starts the supplied WDR simulator and connects Athena to the verified `team=SIM` service. The hardware launcher detects the CH340 receiver USB identity and streams only its serial PWM measurements; the WDR may use an external USB power supply. Wi-Fi connection, profile upload, and finite START remain explicit Athena UI actions. Neither launcher flashes firmware or clears counters.
 - Updated `PROTOTYPE_DEMO.md` with double-click instructions and close keys. Shell syntax and Python compilation checks passed. A simulator smoke run started both services, connected to SIM, passed backend health, and shut down cleanly. A hardware-mode smoke run identified `/dev/cu.usbserial-10`, started/stopped Athena, and did not open the WDR bench or start a replay. The interactive receiver monitor and browser-open step were not exercised in the smoke check.
 
+## Entry 016 — 26 September 2026 — Diagnose disabled Start after real Wi-Fi upload
+
+- Read the running Athena backend and inspected the user's current dashboard without sending bench controls. The live snapshot showed `WDR_REFERENCE` connected over Wi-Fi, STOPPED, a committed **2,500-frame** profile, and unchanged lifetime counters `cycles=25 run_s=34 active_s=33,33,33,16`. The browser later visibly showed **Start 1 cycle enabled**. The grey state occurred while upload was still in progress; no replay was initiated in this investigation.
+- The backend log also showed repeated upload POSTs and a transient 500 from simultaneous use of its shared SQLite connection. Added frontend guards against duplicate bench operations and repeat upload clicks, a nonblocking server-side upload lock that returns 409 for a concurrent upload, and serialized recording/summary reads on the recorder lock.
+- Backend suite: 19 tests passed, including concurrent-upload rejection. Flutter analysis: no issues; eight widget/unit tests passed, including a pending-upload duplicate-operation check. The Flutter web release build succeeded. The currently running backend was **not restarted**, because that would discard its in-memory uploaded-profile association and require another upload before Start; the fixes apply on the next launcher start.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

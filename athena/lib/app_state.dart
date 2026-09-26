@@ -111,6 +111,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _operate(Future<BenchSnapshot> Function() operation) async {
+    if (_disposed || loading) return;
     loading = true;
     error = null;
     notifyListeners();

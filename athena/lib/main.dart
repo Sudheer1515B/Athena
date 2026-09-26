@@ -138,6 +138,7 @@ class _AthenaShellState extends State<AthenaShell> {
                         _dashboard(),
                         ProfilePage(
                           api: widget.state.api,
+                          benchBusy: widget.state.loading,
                           benchConnected:
                               widget.state.snapshot?.connectionState ==
                               'CONNECTED',

@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     app.state.instance_id = str(uuid4())
     app.state.bench = UsbBench()
     app.state.history = HistoryRecorder(app.state.database)
+    app.state.upload_lock = threading.Lock()
     app.state.desired_tcp = None
     app.state.reconnect_after = 0.0
     app.state.reconnect_lock = threading.RLock()
@@ -144,7 +145,13 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
     live = bench.snapshot() if bench is not None else {}
     recorder = getattr(app.state, "history", None)
     if recorder is not None and recorder.database is connection:
-        recorder.observe(live)
+        # One SQLite connection is shared by API worker threads. Keep a
+        # recording write and its summary read in the same critical section.
+        with recorder._lock:
+            recorder.observe(live)
+            counts = database_summary(connection)
+    else:
+        counts = database_summary(connection)
     result = {
         "api_version": 1,
         "server_instance_id": instance_id,
@@ -159,7 +166,7 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "trace": live.get("trace", []),
         "time_sync": live.get("time_sync"),
         "simulator_reset_allowed": live.get("simulator_reset_allowed", False),
-        "history_counts": database_summary(connection),
+        "history_counts": counts,
     }
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
@@ -258,14 +265,20 @@ def disconnect_bench() -> dict:
 
 @app.post("/api/v1/bench/upload/{profile_id}")
 def upload_to_bench(profile_id: str) -> dict:
-    row = profile_row(profile_id)
-    canonical = json.loads(row["canonical_json"])
+    upload_lock = app.state.upload_lock
+    if not upload_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="A profile upload is already in progress")
     try:
-        app.state.bench.upload(profile_id, canonical, row["sum16"])
-    except (BenchError, OSError) as error:
-        raise bench_error(error) from error
-    app.state.history.observe(app.state.bench.snapshot(), action="profile_uploaded")
-    return current_snapshot(app.state.database, app.state.instance_id)
+        row = profile_row(profile_id)
+        canonical = json.loads(row["canonical_json"])
+        try:
+            app.state.bench.upload(profile_id, canonical, row["sum16"])
+        except (BenchError, OSError) as error:
+            raise bench_error(error) from error
+        app.state.history.observe(app.state.bench.snapshot(), action="profile_uploaded")
+        return current_snapshot(app.state.database, app.state.instance_id)
+    finally:
+        upload_lock.release()
 
 
 @app.post("/api/v1/bench/start")
