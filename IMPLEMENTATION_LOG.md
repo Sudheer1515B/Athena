@@ -335,6 +335,18 @@ The simulator proves protocol and app integration, not electrical output or actu
 - The backend log also showed repeated upload POSTs and a transient 500 from simultaneous use of its shared SQLite connection. Added frontend guards against duplicate bench operations and repeat upload clicks, a nonblocking server-side upload lock that returns 409 for a concurrent upload, and serialized recording/summary reads on the recorder lock.
 - Backend suite: 19 tests passed, including concurrent-upload rejection. Flutter analysis: no issues; eight widget/unit tests passed, including a pending-upload duplicate-operation check. The Flutter web release build succeeded. The currently running backend was **not restarted**, because that would discard its in-memory uploaded-profile association and require another upload before Start; the fixes apply on the next launcher start.
 
+## Entry 017 — 26 September 2026 — Verify persisted 2,500-frame real-bench replay
+
+- Re-examined Athena's persistent SQLite history after initially reporting that the 2,500-frame profile had only been uploaded. The physical `WDR_REFERENCE` bench at `10.178.45.105:3333` has a **COMPLETED**, one-cycle session for profile `f18819b3-df2d-4f9a-9040-2ef425115537` (2,500 frames, 50 Hz, SUM16 2518). The session ran from `2026-09-26T01:16:03.898+00:00` to `01:16:54.073+00:00` and records `cycle_complete` and `cycle_target_reached` as observed events.
+- Saved bench counter observations for that session rose from `cycles=25 run_s=34 active_s=33,33,33,16` to `cycles=26 run_s=84 active_s=61,82,79,65`: **+1 cycle, +50 running seconds, +28,+49,+46,+49 active seconds**. These are bench-reported counters, not independently measured servo motion. No receiver capture from this exact 2,500-frame run was found; the independent receiver evidence in Entry 013 is for the earlier 200-frame profile.
+- A fresh read-only Wi-Fi preflight found the bench STOPPED with **3,000 frames** and `cycles=27 run_s=144 active_s=93,142,135,125`. A separate persisted session shows the 3,000-frame profile also completed one cycle. The preflight refused a requested 2,500-frame replay because the bench's committed profile had changed. The receiver USB monitor was read-only and still reported all four idle PWM inputs near 1500 µs at a 20,000 µs period. No START, upload, STOP, CLEAR, or firmware change was sent during this verification.
+
+## Entry 018 — 26 September 2026 — Windows receiver monitor instructions
+
+- Added `pwm_receiver/WINDOWS_MONITOR.md` for the already-programmed receiver attached to a Windows laptop, with Python/pySerial setup, CH340 COM-port identification, 115200-baud monitoring, expected readings, exit keys and wiring. Linked it from the receiver README and demo guide.
+- Documented the separate Mac backend startup because the hardware launcher requires a local Mac receiver. Explicitly recorded that backend restart requires another verified upload before Start, that upload replaces the bench's committed profile, and that quitting the receiver monitor does not stop replay. Updated the demo guide's historical counter/profile wording to include the later persisted 50/60-second physical sessions.
+- Reviewed commands against the existing launcher/backend behavior and the official pySerial documentation. These instructions have not been executed on the user's Windows laptop; no Windows compatibility test, firmware change, bench command or new replay occurred in this documentation step.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

@@ -9,6 +9,8 @@ The main demo uses the organizer's **supplied simulator** and Flutter dashboard.
 
 Both launchers require the existing `.venv` and Flutter web build (`athena/build/web/index.html`). If the build is missing, run `cd athena && flutter build web` once. They refuse to start if their local ports are already occupied, and write backend/simulator logs under `var/demo/`. Use one launcher at a time, and wait until a run has stopped before closing its launcher window so Athena can save the final observation. On macOS, Finder may ask you to confirm opening a newly created `.command` file.
 
+If the receiver USB is attached to a Windows laptop, use [Windows receiver monitor with Athena on the Mac](pwm_receiver/WINDOWS_MONITOR.md). Run the backend directly on the Mac instead of the hardware launcher, which expects the receiver locally. A fresh backend requires a verified upload before Start; uploading replaces the bench's committed profile.
+
 ## Start two local services
 
 From the workspace root, in Terminal A:
@@ -49,10 +51,10 @@ The two ESP32 boards can remain wired and powered. They are **not used** by the 
 .venv/bin/python -u pwm_receiver/check_pwm.py
 ```
 
-The receiver first measured manual commands `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. Later, during Athena's real Wi-Fi replay of a 200-frame flight-log profile, it recorded 21 valid four-channel readings with 19,999–20,000 µs periods; the active widths tracked the uploaded profile. [Saved evidence](captures/real_wifi_flight_20260926.json) is preferable to repeating a physical run live. Current real-bench counters are `cycles=25 run_s=34 active_s=33,33,33,16`. See `pwm_receiver/README.md` for port identities and wiring.
+The receiver first measured manual commands `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. Later, during Athena's real Wi-Fi replay of a 200-frame flight-log profile, it recorded 21 valid four-channel readings with 19,999–20,000 µs periods; the active widths tracked the uploaded profile. [Saved evidence](captures/real_wifi_flight_20260926.json) is preferable to repeating a physical run live. Counters immediately after that run were `cycles=25 run_s=34 active_s=33,33,33,16`; subsequent saved 50-second and 60-second real-bench sessions advanced them further. See `pwm_receiver/README.md` for port identities and wiring, and Entry 017 in `IMPLEMENTATION_LOG.md` for the later verification.
 
 ## What is proven and what remains
 
 - **Proven in Athena against the supplied simulator:** log import, deterministic 3,000-frame compilation, checksum-verified upload, full 60-second finite replay, a connected browser view of the sampled pulse graph, authoritative counters, a completed durable session, history CSV export, and TIME acknowledgement. The end-to-end run added one cycle, 60 running seconds, and distinct per-channel active time. A 4-second smoke test also passed.
-- **Proven on the four-channel reference bench:** Athena uploaded a 200-frame profile from the supplied flight log over Wi-Fi, completed one finite four-second cycle, saved the bench-reported counter deltas, and the independent receiver saw four physical PWM signals matching the profile's value ranges. The board is now stopped at idle with that 200-frame profile committed. The original 100-frame width sequence was archived before replacement.
+- **Proven on the four-channel reference bench:** Athena uploaded a 200-frame profile from the supplied flight log over Wi-Fi, completed one finite four-second cycle, saved the bench-reported counter deltas, and the independent receiver saw four physical PWM signals matching the profile's value ranges. Persisted History also verifies completed one-cycle real-bench runs of 2,500 frames (50 seconds) and 3,000 frames (60 seconds). Those longer runs have bench-reported evidence, without a saved independent receiver capture. The latest read-only check found the bench STOPPED with the 3,000-frame profile committed. The original 100-frame width sequence was archived before replacement.
 - **Not yet proven:** physical servo movement/life and operation on 16-channel hardware. Counter reset remains simulator-only; the backend refuses it on the physical bench.

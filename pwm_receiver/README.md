@@ -2,6 +2,8 @@
 
 This sketch measures the physical signal from each of the WDR bench's four PWM outputs and prints HIGH width / full period / pulse count at 115200 baud. It does not command the bench and requires no servos. It supports classic ESP32 and ESP32-S3, choosing input pins at compile time.
 
+For the receiver connected by USB to a Windows laptop while Athena runs on the Mac, follow [Windows monitor setup](WINDOWS_MONITOR.md). The receiver is already programmed; do not reflash it for this move.
+
 ## Device identity observed on this Mac, 25 September 2026
 
 | Role | USB port | USB adapter | Verified identity | Flash policy |
