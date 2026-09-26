@@ -492,3 +492,9 @@ Removed the standalone “Measured PWM · independent receiver” dashboard card
 ## Entry 036 — 26 September 2026 — Recovery dialog layout only
 
 User narrowed the screenshot request to UI layout; identity/reconnect logic was not edited. Constrained the native recovery dialog content to 520 px, enabled scrolling on small windows, separated the explanation from the cycle field by 24 px and kept its label floated. Added spacing and button wrapping to the recovery banner. Existing approval behavior is unchanged. Flutter analyze and all four existing receiver/recovery widget tests passed; release web build passed. No bench commands, power changes or playback were initiated.
+
+## Entry 037 — 26 September 2026 — Shared Wi-Fi dashboard link
+
+Enabled backend listening on `0.0.0.0:8080` and persisted the binding in the demo launcher. The Mac currently has Wi-Fi IPv4 `10.178.45.149`; shared dashboard is `http://10.178.45.149:8080`, while localhost remains usable. Frontend API and WebSocket URLs already derive from the page origin. Both HTML and snapshot API returned HTTP 200 through the Wi-Fi IP on this Mac; a separate-device test was not available. Updated the motor demo runbook with shared-link startup and trusted-network scope (controller buttons are also exposed). Restarted only after confirming motor playback inactive, then restored a status-only WDR connection; bench STOPPED, no profile/output/start commands sent. Runtime PID78670.
+
+Observed-hours check preceding this change: 15 history/motor unit tests passed; isolated supplied simulator native replay yielded three running seconds and per-channel active seconds `[0,3,0,3]`, matching persisted History deltas and the greater-than-25-us idle deadband. Evidence `/private/tmp/athena-observed-hours-result.json`. Motor SET playback still does not accrue native bench counters.

@@ -158,7 +158,7 @@ def launch(mode: str, receiver: str | None, *, smoke: bool) -> None:
         backend = subprocess.Popen(
             [
                 str(PYTHON), "-m", "uvicorn", "backend.app:app",
-                "--host", "127.0.0.1", "--port", "8080",
+                "--host", "0.0.0.0", "--port", "8080",
             ],
             cwd=ROOT,
             stdout=backend_output,
