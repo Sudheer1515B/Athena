@@ -19,7 +19,6 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from serial import Serial
 from serial.tools import list_ports
 
 
@@ -196,11 +195,21 @@ def launch(mode: str, receiver: str | None, *, smoke: bool) -> None:
                 "use a separate USB power supply; its USB serial port is untouched."
             )
             print(f"Receiver: {receiver} at 115200 baud. Press Ctrl-C to stop.\n")
-            with Serial(receiver, 115200, timeout=1) as serial_port:
-                while True:
-                    line = serial_port.readline().decode("ascii", errors="replace").strip()
-                    if line:
-                        print(line, flush=True)
+            request = urllib.request.Request(URL + "/api/v1/receiver/usb/connect", data=b"", method="POST")
+            with urllib.request.urlopen(request, timeout=5) as response:
+                json.load(response)
+            # Athena owns serial; a second reader would steal lines from its graph.
+            last_sample = None
+            while True:
+                with urllib.request.urlopen(URL + "/api/v1/snapshot", timeout=5) as response:
+                    feedback = json.load(response)["receiver"]
+                trace = feedback.get("trace") or []
+                if feedback["fresh"] and trace and trace[-1]["sampled_at"] != last_sample:
+                    last_sample = trace[-1]["sampled_at"]
+                    print(" | ".join(f"OUT{c['channel']} {c['width_us']}us/{c['period_us']}us" if c["signal"] else f"OUT{c['channel']} NO SIGNAL" for c in feedback["channels"]), flush=True)
+                elif not feedback["fresh"]:
+                    print("Receiver readings unavailable/stale", flush=True)
+                time.sleep(.25)
     finally:
         for process in reversed(processes):
             stop(process)

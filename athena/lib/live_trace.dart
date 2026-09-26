@@ -7,16 +7,23 @@ import 'theme.dart';
 
 /// Recent pulse widths reported by STATUS, sampled by the local backend.
 class LiveTrace extends StatelessWidget {
-  const LiveTrace({super.key, required this.samples});
+  const LiveTrace({super.key, required this.samples, this.physical = false});
 
   final List<TraceSample> samples;
+  final bool physical;
 
   @override
   Widget build(BuildContext context) {
     if (samples.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 230,
-        child: Center(child: Text('No bench pulse samples yet.')),
+        child: Center(
+          child: Text(
+            physical
+                ? 'No fresh receiver measurements.'
+                : 'No live bench command samples.',
+          ),
+        ),
       );
     }
     final channelCount = samples.last.pulseUs.length;
@@ -64,9 +71,11 @@ class LiveTrace extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Sampled command pulses from STATUS · not physical feedback',
-          style: TextStyle(color: Palette.muted, fontSize: 11),
+        Text(
+          physical
+              ? 'Independent receiver HIGH widths · missing pulses create gaps, not zero values'
+              : 'Sampled command pulses from STATUS · not physical feedback',
+          style: const TextStyle(color: Palette.muted, fontSize: 11),
         ),
       ],
     );
@@ -126,7 +135,11 @@ class _TracePainter extends CustomPainter {
       final path = Path();
       var hasPoint = false;
       for (var index = 0; index < samples.length; index++) {
-        if (channel >= samples[index].pulseUs.length) continue;
+        if (channel >= samples[index].pulseUs.length ||
+            samples[index].pulseUs[channel] <= 0) {
+          hasPoint = false;
+          continue;
+        }
         final point = Offset(x(index), y(samples[index].pulseUs[channel]));
         if (!hasPoint) {
           path.moveTo(point.dx, point.dy);
@@ -136,7 +149,7 @@ class _TracePainter extends CustomPainter {
         }
       }
       canvas.drawPath(path, paint);
-      if (hasPoint) {
+      if (hasPoint && samples.last.pulseUs[channel] > 0) {
         final lastPoint = Offset(
           x(samples.length - 1),
           y(samples.last.pulseUs[channel]),

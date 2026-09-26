@@ -5,6 +5,7 @@ import 'history_page.dart';
 import 'live_trace.dart';
 import 'profile_page.dart';
 import 'theme.dart';
+import 'receiver_feedback.dart';
 
 void main() => runApp(const MyApp());
 
@@ -101,6 +102,8 @@ class _AthenaShellState extends State<AthenaShell> {
   final manualChannel = TextEditingController(text: '0');
   final manualWidth = TextEditingController(text: '1500');
   final cycleTarget = TextEditingController(text: '1');
+  final receiverHost = TextEditingController();
+  final receiverToken = TextEditingController();
 
   @override
   void dispose() {
@@ -110,6 +113,8 @@ class _AthenaShellState extends State<AthenaShell> {
     manualChannel.dispose();
     manualWidth.dispose();
     cycleTarget.dispose();
+    receiverHost.dispose();
+    receiverToken.dispose();
     super.dispose();
   }
 
@@ -120,6 +125,11 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.snapshot?.recovery != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: _recoveryPrompt(),
+            ),
           if (widget.state.connectionWarning != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -487,7 +497,7 @@ class _AthenaShellState extends State<AthenaShell> {
           const Row(
             children: [
               Expanded(child: HeaderLabel('NAME')),
-              SizedBox(width: 76, child: HeaderLabel('LIVE µs')),
+              SizedBox(width: 76, child: HeaderLabel('CMD µs')),
               SizedBox(width: 72, child: HeaderLabel('IDLE µs')),
               SizedBox(width: 66, child: HeaderLabel('BENCH h')),
               SizedBox(width: 66, child: HeaderLabel('ACTIVE h')),
@@ -508,7 +518,10 @@ class _AthenaShellState extends State<AthenaShell> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    SizedBox(width: 76, child: Text(live[i])),
+                    SizedBox(
+                      width: 76,
+                      child: Text(widget.state.benchLive ? live[i] : '—'),
+                    ),
                     const SizedBox(width: 72, child: Text('1500')),
                     SizedBox(width: 66, child: Text(sharedHours)),
                     SizedBox(
@@ -620,10 +633,22 @@ class _AthenaShellState extends State<AthenaShell> {
       ),
       const SizedBox(height: 18),
       BenchCard(
+        title: 'Measured PWM · independent receiver',
+        child: ReceiverFeedback(
+          data: widget.state.snapshot?.receiver,
+          backendLive: widget.state.serviceLive,
+        ),
+      ),
+      const SizedBox(height: 18),
+      BenchCard(
         title: widget.state.benchLive
-            ? 'Live traces · this cycle'
-            : 'Last observed traces · stale',
-        child: LiveTrace(samples: widget.state.snapshot?.trace ?? const []),
+            ? 'Commanded PWM · bench STATUS'
+            : 'Commanded PWM · unavailable / stale',
+        child: LiveTrace(
+          samples: widget.state.benchLive
+              ? widget.state.snapshot?.trace ?? const []
+              : const [],
+        ),
       ),
     ],
   );
@@ -633,6 +658,67 @@ class _AthenaShellState extends State<AthenaShell> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Independent PWM receiver',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        Wrap(
+          spacing: 10,
+          children: [
+            OutlinedButton(
+              onPressed: widget.state.loading
+                  ? null
+                  : widget.state.connectUsbReceiver,
+              child: const Text('Connect USB receiver (CH340)'),
+            ),
+            OutlinedButton(
+              onPressed: widget.state.loading
+                  ? null
+                  : widget.state.disconnectReceiver,
+              child: const Text('Disconnect receiver'),
+            ),
+          ],
+        ),
+        const Text(
+          'Close receiver terminal monitors first. Only the CH340 receiver is opened; the WDR bench USB adapter is refused.',
+          style: TextStyle(color: Palette.muted, fontSize: 12),
+        ),
+        Material(
+          color: Palette.background,
+          child: ExpansionTile(
+            title: const Text('Receiver on another computer'),
+            children: [
+              TextField(
+                controller: receiverHost,
+                decoration: const InputDecoration(
+                  labelText: 'Receiver computer IPv4 address',
+                ),
+              ),
+              TextField(
+                controller: receiverToken,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Receiver bridge pairing token',
+                ),
+              ),
+              OutlinedButton(
+                onPressed: widget.state.loading
+                    ? null
+                    : () => widget.state.connectReceiver(
+                        receiverHost.text.trim(),
+                        8766,
+                        receiverToken.text.trim(),
+                      ),
+                child: const Text('Connect receiver bridge · port 8766'),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          'Receiver: ${widget.state.snapshot?.receiver?['source'] ?? 'not connected'}',
+          style: const TextStyle(color: Palette.muted),
+        ),
+        const Divider(height: 28),
         const Text(
           'WDR Protocol v1 · USB bench or local simulator',
           style: TextStyle(color: Palette.ink, fontWeight: FontWeight.w600),
@@ -855,6 +941,94 @@ class _AthenaShellState extends State<AthenaShell> {
       ],
     ),
   );
+
+  Widget _recoveryPrompt() {
+    final proposal = widget.state.snapshot!.recovery!;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(border: Border.all(color: Palette.brand)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bench returned · permission required to restart playback',
+            style: TextStyle(color: Palette.brand, fontWeight: FontWeight.w700),
+          ),
+          Text(proposal['message'].toString()),
+          Text(
+            'Remaining cycles from saved counters: ${proposal['remaining_cycles'] ?? 'unknown'} · last observed frame: ${proposal['last_observed_frame'] ?? 'unknown'}',
+          ),
+          if (proposal['error'] != null)
+            Text(
+              proposal['error'].toString(),
+              style: const TextStyle(color: Palette.critical),
+            ),
+          Wrap(
+            spacing: 10,
+            children: [
+              FilledButton(
+                onPressed: widget.state.loading || !widget.state.benchLive
+                    ? null
+                    : () async {
+                        var cycleText = '${proposal['remaining_cycles'] ?? 1}';
+                        final cycles = await showDialog<int>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Approve re-upload and restart?'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'The saved profile will be uploaded again and outputs will move. Playback restarts at frame 0. The interrupted cycle repeats; progress around power loss can be uncertain.',
+                                ),
+                                TextFormField(
+                                  initialValue: cycleText,
+                                  onChanged: (value) => cycleText = value,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Whole cycles to run',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () {
+                                  final value = int.tryParse(cycleText);
+                                  if (value != null && value > 0) {
+                                    Navigator.pop(context, value);
+                                  }
+                                },
+                                child: const Text('Approve restart'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (cycles != null) {
+                          await widget.state.restartRecovery(
+                            proposal['id'].toString(),
+                            cycles,
+                          );
+                        }
+                      },
+                child: const Text('Review restart…'),
+              ),
+              TextButton(
+                onPressed: widget.state.loading
+                    ? null
+                    : widget.state.dismissRecovery,
+                child: const Text('Keep stopped'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _banner(String message) => Container(
     padding: const EdgeInsets.all(14),

@@ -20,6 +20,8 @@ class BenchSnapshot {
     this.observation,
     this.lastKnown,
     this.operation,
+    this.receiver,
+    this.recovery,
   });
 
   final String connectionState;
@@ -36,6 +38,8 @@ class BenchSnapshot {
   final Map<String, dynamic>? observation;
   final Map<String, dynamic>? lastKnown;
   final Map<String, dynamic>? operation;
+  final Map<String, dynamic>? receiver;
+  final Map<String, dynamic>? recovery;
   bool get isFresh => observation?['fresh'] != false;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
@@ -84,6 +88,12 @@ class BenchSnapshot {
           : null,
       operation: json['operation'] is Map
           ? Map<String, dynamic>.from(json['operation'] as Map)
+          : null,
+      receiver: json['receiver'] is Map
+          ? Map<String, dynamic>.from(json['receiver'] as Map)
+          : null,
+      recovery: json['recovery'] is Map
+          ? Map<String, dynamic>.from(json['recovery'] as Map)
           : null,
     );
   }
@@ -276,6 +286,39 @@ class BenchApi {
 
   Future<BenchSnapshot> syncTime() async => BenchSnapshot.fromJson(
     _decodeObject(await _client.post(endpoint('bench/time-sync'))),
+  );
+
+  Future<BenchSnapshot> connectReceiver(
+    String host,
+    int port,
+    String token,
+  ) async => BenchSnapshot.fromJson(
+    _decodeObject(
+      await _client.post(
+        endpoint('receiver/connect'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'host': host, 'port': port, 'token': token}),
+      ),
+    ),
+  );
+  Future<BenchSnapshot> disconnectReceiver() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('receiver/disconnect'))),
+  );
+  Future<BenchSnapshot> connectUsbReceiver() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('receiver/usb/connect'))),
+  );
+  Future<BenchSnapshot> restartRecovery(String id, int cycles) async =>
+      BenchSnapshot.fromJson(
+        _decodeObject(
+          await _client.post(
+            endpoint('bench/recovery/restart'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'recovery_id': id, 'cycles': cycles}),
+          ),
+        ),
+      );
+  Future<BenchSnapshot> dismissRecovery() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('bench/recovery/dismiss'))),
   );
 
   Future<BenchSnapshot> clearSimulatorCounters() async =>

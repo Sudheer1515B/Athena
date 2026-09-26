@@ -216,6 +216,29 @@ def verify(output, outage_seconds=6):
                 assert reconciled["has_link_gap"] and reconciled["identity_confidence"] == "uncertain", reconciled
                 assert any(e["kind"] == "command_unconfirmed" and e["details"]["action"] == "stop" for e in reconciled["events"])
                 results["lost_stop_reply"] = reconciled
+                request(client, "post", f"bench/upload/{profile['id']}")
+                request(client, "post", "bench/start", json={"cycles": 4})
+                session_id = recorder.sessions()[0]["id"]
+                commands_before = len(simulator.commands)
+                simulator.device.reboot()
+                deadline = time.monotonic() + 20
+                proposal = None
+                while time.monotonic() < deadline:
+                    snap = request(client, "get", "snapshot")
+                    proposal = snap["recovery"]
+                    if proposal and snap["connection"]["state"] == "CONNECTED":
+                        break
+                    time.sleep(.1)
+                assert proposal and proposal["phase"] == "AWAITING_APPROVAL", snap
+                assert not any(c.split()[0] in {"START", "LOAD", "CLEAR", "RESUME"} for c in simulator.commands[commands_before:])
+                assert recorder.session_detail(session_id)["status"] == "REBOOT_OBSERVED"
+                request(client, "post", "bench/recovery/restart", json={"recovery_id": proposal["id"], "cycles": 1})
+                new_session = recorder.sessions()[0]["id"]
+                finished = wait_session(recorder, new_session)
+                assert finished["status"] == "COMPLETED" and new_session != session_id, finished
+                duplicate = client.post("/api/v1/bench/recovery/restart", json={"recovery_id": proposal["id"], "cycles": 1})
+                assert duplicate.status_code == 409
+                results["approved_power_recovery"] = {"proposal": proposal, "prior_session": recorder.session_detail(session_id), "new_session": finished, "duplicate_denied": True}
                 results["command_counts"] = {verb: sum(c.split()[0] == verb for c in simulator.commands)
                                              for verb in ("START", "LOAD", "COMMIT", "CLEAR")}
         finally:

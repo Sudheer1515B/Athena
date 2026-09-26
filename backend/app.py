@@ -24,6 +24,7 @@ from .profiles import MAX_SOURCE_BYTES, ProfileIssue, compile_profile, inspect_c
 from .bench_usb import BenchError, TcpBench, UsbBench
 from .history import HistoryRecorder
 from .monitor import BenchMonitor
+from .receiver import ReceiverMonitor
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,9 +49,12 @@ async def lifespan(app: FastAPI):
     app.state.reconnect_lock = threading.RLock()
     app.state.monitor = BenchMonitor(app.state, lambda **kwargs: TcpBench(**kwargs))
     app.state.monitor.start()
+    app.state.receiver = ReceiverMonitor()
+    app.state.receiver.start()
     try:
         yield
     finally:
+        app.state.receiver.stop()
         app.state.monitor.stop()
         app.state.bench.disconnect()
         history_database.close()
@@ -93,6 +97,17 @@ class TcpConnectRequest(BaseModel):
 
 
 class StartRequest(BaseModel):
+    cycles: int = Field(ge=1, le=100000)
+
+
+class ReceiverConnectRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=64)
+    port: int = Field(default=8766, ge=1, le=65535)
+    token: str = Field(min_length=16, max_length=128)
+
+
+class RecoveryRequest(BaseModel):
+    recovery_id: str
     cycles: int = Field(ge=1, le=100000)
 
 
@@ -180,6 +195,8 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "history_counts": counts,
         "observation": live.get("observation"),
         "last_known": live.get("last_known"),
+        "receiver": app.state.receiver.snapshot() if getattr(app.state, "receiver", None) else None,
+        "recovery": live.get("recovery"),
     }
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
@@ -201,6 +218,30 @@ def health() -> dict:
 
 @app.get("/api/v1/snapshot")
 def snapshot() -> dict:
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/receiver/connect")
+def connect_receiver(request: ReceiverConnectRequest):
+    try:
+        app.state.receiver.connect(request.host, request.port, request.token)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/receiver/disconnect")
+def disconnect_receiver():
+    app.state.receiver.disconnect()
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/receiver/usb/connect")
+def connect_usb_receiver():
+    try:
+        app.state.receiver.connect_usb()
+    except (ValueError, OSError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
@@ -298,6 +339,9 @@ def upload_to_bench(profile_id: str) -> dict:
         raise HTTPException(status_code=409, detail="A profile upload is already in progress")
     try:
         row = profile_row(profile_id)
+        monitor = getattr(app.state, "monitor", None)
+        if monitor is not None and monitor.api_database is app.state.database:
+            monitor.recovery = monitor.run_context = None
         canonical = json.loads(row["canonical_json"])
         try:
             app.state.bench.upload(profile_id, canonical, row["sum16"])
@@ -345,6 +389,44 @@ def set_pulse(request: SetPulseRequest) -> dict:
     except BenchError as error:
         raise bench_error(error) from error
     app.state.history.observe(app.state.bench.snapshot(), action="set_pulse")
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/bench/recovery/restart")
+@bench_operation
+def restart_recovery(request: RecoveryRequest):
+    monitor = app.state.monitor
+    proposal = monitor.recovery
+    if proposal is None or request.recovery_id != proposal["id"]:
+        raise HTTPException(status_code=409, detail="This recovery proposal is no longer current")
+    app.state.bench.refresh()
+    monitor.validate_identity(app.state.bench.snapshot())
+    if (app.state.bench.status or {}).get("state") != "STOPPED":
+        raise HTTPException(status_code=409, detail="Bench must be stopped before recovery")
+    maximum = proposal["remaining_cycles"] or proposal["target_cycles"]
+    if request.cycles > maximum:
+        raise HTTPException(status_code=422, detail="Requested cycles exceed this recovery's remaining target")
+    row = profile_row(proposal["profile_id"])
+    app.state.history.notice("recovery_approved", {"prior_session_id": proposal["session_id"], "cycles": request.cycles, "restart_at_frame": 0})
+    proposal["phase"] = "UPLOADING"
+    try:
+        app.state.bench.upload(row["id"], json.loads(row["canonical_json"]), row["sum16"])
+    except (BenchError, OSError) as error:
+        proposal["phase"] = "FAILED"
+        proposal["error"] = str(error)
+        raise bench_error(error) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="profile_uploaded")
+    # Consume before START: a lost reply must never offer another blind Start.
+    monitor.recovery = monitor.run_context = None
+    monitor.recovery_warning = None
+    return start_bench(StartRequest(cycles=request.cycles))
+
+
+@app.post("/api/v1/bench/recovery/dismiss")
+@bench_operation
+def dismiss_recovery():
+    app.state.monitor.recovery = app.state.monitor.run_context = None
+    app.state.monitor.recovery_warning = None
     return current_snapshot(app.state.database, app.state.instance_id)
 
 

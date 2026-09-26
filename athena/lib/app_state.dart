@@ -109,6 +109,14 @@ class AppState extends ChangeNotifier {
   Future<void> connectTcp(String host, int port) =>
       _operate(() => _api.connectTcp(host, port));
   Future<void> disconnectBench() => _operate(_api.disconnectBench);
+  Future<void> connectReceiver(String host, int port, String token) =>
+      _operate(() => _api.connectReceiver(host, port, token));
+  Future<void> disconnectReceiver() => _operate(_api.disconnectReceiver);
+  Future<void> connectUsbReceiver() => _operate(_api.connectUsbReceiver);
+  bool get serviceLive => !_pollError;
+  Future<void> restartRecovery(String id, int cycles) =>
+      _operate(() => _api.restartRecovery(id, cycles), uploadingProfile: true);
+  Future<void> dismissRecovery() => _operate(_api.dismissRecovery);
   Future<void> setPulse(int channel, int widthUs) =>
       _operate(() => _api.setPulse(channel, widthUs));
   Future<void> syncTime() => _operate(_api.syncTime);

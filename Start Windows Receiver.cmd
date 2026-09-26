@@ -5,5 +5,5 @@ if not exist ".venv\Scripts\python.exe" (
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" -u scripts\monitor_receiver.py %*
+".venv\Scripts\python.exe" -u scripts\monitor_receiver.py --serve %*
 pause

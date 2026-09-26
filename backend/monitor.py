@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import threading
 import time
 import random
+from uuid import uuid4
 
 from .bench_usb import BenchError
 
@@ -36,6 +37,8 @@ class BenchMonitor:
         self.blocked_reason = None
         self.recovery_warning = None
         self.outage_started = None
+        self.run_context = None
+        self.recovery = None
 
     def reset_identity(self) -> None:
         self.expected_capabilities = None
@@ -44,6 +47,22 @@ class BenchMonitor:
         self.retry_attempts = 0
         self.state.reconnect_after = 0
         self.outage_started = None
+        self.run_context = self.recovery = None
+
+    def prepare_recovery(self, live):
+        if self.run_context is None or self.recovery is not None:
+            return
+        context = self.run_context
+        counters = live.get("counters") or {}
+        completed = int(counters.get("cycles", "0")) - context["baseline_cycles"]
+        reliable = (completed >= 0 and int(counters.get("run_s", "0")) >= context["baseline_run_s"])
+        remaining = max(0, context["target_cycles"] - completed) if reliable else None
+        if remaining == 0:
+            return
+        self.recovery = {**context, "id": str(uuid4()), "remaining_cycles": remaining,
+                         "counter_continuity": reliable, "phase": "AWAITING_APPROVAL",
+                         "message": "Bench restarted or lost its profile. Re-upload requires approval. Exact-frame resume is unavailable; the interrupted cycle restarts. Counter persistence around power loss may omit progress."}
+        self.state.history.notice("recovery_offered", {"remaining_cycles": remaining, "profile_id": context["profile_id"]})
 
     def pin_identity(self) -> None:
         info = self.state.bench.snapshot().get("connection", {}).get("bench") or {}
@@ -105,6 +124,22 @@ class BenchMonitor:
         live = self.state.bench.snapshot()
         connected = live.get("connection", {}).get("state") == "CONNECTED"
         self.state.history.observe(live)
+        if connected and (live.get("bench_state") or {}).get("state") in {"RUNNING", "PAUSED"}:
+            profile_id = (live.get("profile") or {}).get("id")
+            sessions = self.state.history.sessions(1)
+            if profile_id and sessions and sessions[0]["ended_at"] is None:
+                session = sessions[0]
+                detail = self.state.history.session_detail(session["id"])
+                samples = detail["counter_observations"]
+                if samples:
+                    self.run_context = {"profile_id": profile_id, "session_id": session["id"],
+                                        "target_cycles": session["target_cycles"], "baseline_cycles": samples[0]["cycles"],
+                                        "baseline_run_s": samples[0]["run_s"],
+                                        "last_observed_frame": (live.get("bench_state") or {}).get("frame")}
+        elif connected and self.recovery is None and self.run_context is not None:
+            previous = self.state.history.session_detail(self.run_context["session_id"])
+            if previous is not None and previous["ended_at"] is not None:
+                self.run_context = None
         with self._cache_lock:
             self._live = deepcopy(live)
             if connected:
@@ -139,6 +174,7 @@ class BenchMonitor:
             live["last_known"] = deepcopy(self.last_known) if not live["observation"]["fresh"] else None
         progress_reader = getattr(self.state.bench, "upload_progress", None)
         live["operation"] = progress_reader() if progress_reader else None
+        live["recovery"] = deepcopy(self.recovery)
         return live
 
     def tick(self) -> None:
@@ -152,6 +188,7 @@ class BenchMonitor:
                     self.validate_identity(bench.snapshot())
                     if self.observed_reboot(bench.snapshot()):
                         live = bench.snapshot()
+                        self.prepare_recovery(live)
                         live["reboot_detected"] = True
                         self.state.history.observe(live, action="bench_reboot_observed")
                         self.recovery_warning = "Bench reboot observed. Profile identity and the exact stop time are unknown; verify a new upload before Start."
@@ -177,9 +214,12 @@ class BenchMonitor:
                         self.state.bench = replacement
                         self.state.reconnect_after = 0
                         if self.observed_reboot(recovered):
+                            self.prepare_recovery(recovered)
                             recovered["reboot_detected"] = True
                             self.state.history.observe(recovered, action="bench_reboot_observed")
                             self.recovery_warning = "Bench reboot observed. Profile identity and the exact stop time are unknown; verify a new upload before Start."
+                        elif (recovered.get("bench_state") or {}).get("state") == "STOPPED" and int((recovered.get("bench_state") or {}).get("frames", "0")) == 0:
+                            self.prepare_recovery(recovered)
                 except IdentityMismatch as error:
                     replacement.disconnect()
                     self.blocked_reason = self.last_error = str(error)
