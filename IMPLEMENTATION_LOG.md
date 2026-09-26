@@ -411,6 +411,11 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Updated bring-up notes with the fixed-firmware compatibility gate: boot/STOP/completion idle is 1500 us and upload sends STOP, whereas typical unidirectional PWM ESCs use roughly 1000–2000 us for zero–full throttle. A frontend Stop change would not fix all firmware states. Confirmed common behavior against primary ArduPilot PWM/ESC documentation linked in the bring-up file; no model-specific assumptions made.
 - No motor commands, firmware change, ESC calibration or playback performed. Model-specific motion remains pending compatibility confirmation.
 
+## Entry 029 — 26 September 2026 — tentative Readytosky 40A identification
+
+- User suggests Readytosky 40A. Checked manufacturer product pages: both 2–4S/5V3A-BEC and 2–6S OPTO/no-BEC variants exist. Exact variant, zero/arming pulse and 3.3-V compatibility remain unconfirmed; added primary-source links and unresolved details to `ACTUATOR_BRINGUP.md`.
+- No software changes, firmware changes, calibration or motor commands. A tentative brand/current rating does not resolve WDR's 1500-us idle/STOP/completion mismatch.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

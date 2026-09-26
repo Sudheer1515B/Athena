@@ -47,3 +47,12 @@ Common signal ground: bench GND, receiver GND and actuator/driver signal ground.
 ## Current readiness
 
 Source rollback is preserved on `prototype-rollback-20260926` at `6f8b5b8`. Current physical-feedback/recovery release is `21491aa`. The Mac receiver was verified on `/dev/cu.usbserial-10` (CH340 1a86:7523), with four idle PWM inputs at roughly 1500 µs / 20,000 µs. No loaded actuator run has been performed by automation. Model-specific setup and the team's loaded test remain pending.
+
+## Tentative ESC identification: Readytosky 40A
+
+User reports “Readytosky 40A?”; treat brand/current as tentative, not a confirmed variant. Manufacturer lists at least:
+
+- [2–4S 40A with 5V/3A BEC](https://www.readytosky.com/e_productshow/?1223-NEW-40A-ESC-2-4S-5V3A-Brushless-ESC-Electronic-Speed-Controller-For-F450-S500-ZD550-RC-Helicopter-Quadcopter-1223.html=), product 2020831113544.
+- [2–6S 40A OPTO, no BEC](https://www.readytosky.com/e_productshow/?301-Readytosky-2-6S-40A-Electronic-Speed-Controller-301.html=), product 201758105925; manufacturer describes throttle refresh rates up to 621 Hz, but does not establish the exact team's unit, its low-throttle endpoint or 1500-us stop behavior.
+
+The manufacturer pages checked do not provide a verified model-specific arming/zero-throttle pulse or 3.3-V input threshold. Do not infer either from current rating or another manufacturer's manual. Obtain label/packaging details and the actual supplied instructions. Keep the fixed bench's 1500-us idle incompatibility unresolved until verified. No ESC calibration or live command was issued during research.
