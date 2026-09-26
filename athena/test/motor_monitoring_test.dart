@@ -68,7 +68,7 @@ void main() {
     var cancelled = false;
     await mount(tester, status(), cancel: () async => cancelled = true);
     expect(find.text('Bench: 1000 µs'), findsNWidgets(4));
-    expect(find.text('Measured PWM: UNKNOWN'), findsNWidgets(4));
+    expect(find.textContaining('Measured PWM:'), findsNothing);
     expect(find.text('Motor RPM: not measured'), findsNWidgets(4));
     expect(
       find.text('60/150 frames acknowledged · pass 2/3 · profile 50 Hz'),

@@ -71,13 +71,6 @@ class MotorMonitoring extends StatelessWidget {
                           ? channels[index] as Map
                           : const {};
                       final width = fresh ? channel['bench_reported_us'] : null;
-                      final measured =
-                          backendLive && data?['receiver_fresh'] == true;
-                      final physical = !measured
-                          ? 'UNKNOWN'
-                          : channel['physical_pwm_state'] == 'NO_SIGNAL'
-                          ? 'NO SIGNAL'
-                          : '${channel['measured_us']} µs';
                       return Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -111,17 +104,6 @@ class MotorMonitoring extends StatelessWidget {
                                   fontSize: 11,
                                 ),
                               ),
-                            Text(
-                              'Measured PWM: $physical',
-                              style: TextStyle(
-                                color:
-                                    physical == 'UNKNOWN' ||
-                                        physical == 'NO SIGNAL'
-                                    ? Palette.critical
-                                    : Palette.secondary,
-                                fontSize: 12,
-                              ),
-                            ),
                             const Text(
                               'Motor RPM: not measured',
                               style: TextStyle(

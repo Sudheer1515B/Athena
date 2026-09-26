@@ -4,7 +4,6 @@ import 'app_state.dart';
 import 'history_page.dart';
 import 'profile_page.dart';
 import 'theme.dart';
-import 'receiver_feedback.dart';
 import 'motor_monitoring.dart';
 import 'motor_recovery.dart';
 
@@ -673,14 +672,6 @@ class _AthenaShellState extends State<AthenaShell> {
               style: TextStyle(color: Palette.muted, fontSize: 12.5),
             ),
           ],
-        ),
-      ),
-      const SizedBox(height: 18),
-      BenchCard(
-        title: 'Measured PWM · independent receiver',
-        child: ReceiverFeedback(
-          data: widget.state.snapshot?.receiver,
-          backendLive: widget.state.serviceLive,
         ),
       ),
       const SizedBox(height: 18),
