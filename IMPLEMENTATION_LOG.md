@@ -405,6 +405,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Added `ACTUATOR_BRINGUP.md`: device/driver/power/limit questions, output-to-receiver/actuator signal mapping, independent supply/common ground, initial finite test sequence, actual STOP=1500 us behavior, recovery approval and measurement coverage limits. Asked for device models/type and supply ratings before model-specific profile settings or motion.
 - No code/firmware changes, bench commands, upload, replay, reset or counter clear were performed. Loaded operation remains unverified. The receiver detects loss at its input; it cannot detect a separate actuator branch being unplugged while its own signal remains present.
 
+## Entry 028 — 26 September 2026 — drone motor clarification
+
+- User confirms drone motors; exact ESCs, supply and signal compatibility remain unknown. Asked the hardware team for ESC model, ordinary 50-Hz PWM support and the meaning of 1500 us.
+- Updated bring-up notes with the fixed-firmware compatibility gate: boot/STOP/completion idle is 1500 us and upload sends STOP, whereas typical unidirectional PWM ESCs use roughly 1000–2000 us for zero–full throttle. A frontend Stop change would not fix all firmware states. Confirmed common behavior against primary ArduPilot PWM/ESC documentation linked in the bring-up file; no model-specific assumptions made.
+- No motor commands, firmware change, ESC calibration or playback performed. Model-specific motion remains pending compatibility confirmation.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

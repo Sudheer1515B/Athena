@@ -2,6 +2,13 @@
 
 Status: the team is preparing four real actuators. Models, power supply, driver/ESC requirements and safe pulse/travel limits are pending confirmation. Software already supports four PWM outputs and independent receiver measurements. Do not treat the prior signal-only validation as validation with real actuator loads.
 
+Update: user confirms **drone motors**; ESC models and power details remain unknown. Assume this is not a positional-servo hookup until the hardware team confirms otherwise. Brushless drone motors need ESCs; the bench's ordinary servo PWM cannot be assumed compatible with DShot/OneShot-only ESC configurations.
+
+**Compatibility gate:** WDR emits 1500 us on boot/STOP and automatic completion; upload also sends STOP. Typical unidirectional PWM ESCs use about 1000 us for zero and 2000 us for full throttle, so 1500 us may command substantial throttle. Changing the dashboard's Stop button alone cannot correct the fixed firmware's idle/completion behavior. Keep actuator power off and propellers removed until the ESC manual/team confirms signal protocol, period and 1500-us behavior. Do not automatically calibrate or arm an unknown ESC or replay the existing servo profile as throttle.
+
+Primary references: [ArduPilot PWM ESC protocols](https://ardupilot.org/copter/docs/common-brushless-escs.html) explains typical zero/full pulse widths and distinct protocols; [ESC calibration](https://ardupilot.org/copter/docs/esc-calibration.html) requires model-specific setup and propeller removal. These describe common behavior, not identification of the team's unknown ESC.
+
+
 ## Confirm before playback
 
 - Device type/model: ordinary PWM servo, continuous-rotation servo, ESC-controlled motor, or a motor needing a separate driver. Raw motors cannot be powered or driven directly by ESP32 GPIO.
