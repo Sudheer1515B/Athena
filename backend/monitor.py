@@ -154,6 +154,26 @@ class BenchMonitor:
                 self.outage_started = None
         return live
 
+    def request_motor_recovery_low(self):
+        motor = getattr(self.state, "motor_replay", None)
+        recovery = motor.recovery() if motor is not None and not motor.active else None
+        context = (recovery or {}).get("context") or {}
+        bench = self.state.bench
+        # Low only, never a throttle resume. Boot's 1500-us transient occurs
+        # before this network action and still needs hardware protection.
+        if recovery and bench.connected and context.get("capabilities") == self.expected_capabilities and list(context.get("tcp") or []) == list(self.state.desired_tcp or []) and (bench.status or {}).get("state") == "STOPPED" and (bench.status or {}).get("us") != "1000,1000,1000,1000":
+            try:
+                for channel in range(4):
+                    bench.command(f"SET {channel} 1000")
+                bench.refresh()
+                self.state.history.notice("motor_recovery_low_requested", {"run_id": recovery["run_id"],
+                    "bench_reported_low": (bench.status or {}).get("us") == "1000,1000,1000,1000",
+                    "boot_output_before_reconnection_unknown": True})
+            except (BenchError, OSError, ValueError) as error:
+                self.last_error = str(error)
+                bench.disconnect()
+                self.schedule_retry()
+
     def snapshot(self) -> dict:
         if getattr(self._local, "active", False):
             self.capture()
@@ -228,6 +248,7 @@ class BenchMonitor:
                     replacement.disconnect()
                     self.last_error = str(error)
                     self.schedule_retry()
+            self.request_motor_recovery_low()
             self.capture()
         finally:
             self.io_lock.release()

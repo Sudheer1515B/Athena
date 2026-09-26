@@ -26,6 +26,7 @@ from .history import HistoryRecorder
 from .monitor import BenchMonitor
 from .receiver import ReceiverMonitor
 from .motor_replay import MotorReplay
+from .motor_monitoring import motor_monitoring
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,11 +49,16 @@ async def lifespan(app: FastAPI):
     app.state.desired_tcp = None
     app.state.reconnect_after = 0.0
     app.state.reconnect_lock = threading.RLock()
+    app.state.motor_replay = MotorReplay(DATA_DIR / "motor-checkpoint.json")
     app.state.monitor = BenchMonitor(app.state, lambda **kwargs: TcpBench(**kwargs))
+    pending = app.state.motor_replay.recovery()
+    context = (pending or {}).get("context") or {}
+    if context.get("tcp"):
+        app.state.desired_tcp = tuple(context["tcp"])
+        app.state.monitor.expected_capabilities = context.get("capabilities")
     app.state.monitor.start()
     app.state.receiver = ReceiverMonitor()
     app.state.receiver.start()
-    app.state.motor_replay = MotorReplay()
     try:
         yield
     finally:
@@ -124,6 +130,12 @@ class MotorRunRequest(BaseModel):
     cycles: int = Field(default=1, ge=1, le=100)
     max_us: int = Field(default=1100, ge=1000, le=2000)
     safety_confirmed: bool = False
+
+
+class MotorResumeRequest(BaseModel):
+    run_id: str
+    hardware_recovery_confirmed: bool = False
+    uncertainty_acknowledged: bool = False
 
 
 def bench_error(error: Exception) -> HTTPException:
@@ -209,6 +221,7 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "recovery": live.get("recovery"),
         "motor_replay": app.state.motor_replay.snapshot() if getattr(app.state, "motor_replay", None) else None,
     }
+    result["motor_monitoring"] = motor_monitoring(live, result["motor_replay"], result["receiver"])
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
         result["connection"]["state"] = "RECOVERY_REQUIRED" if (result.get("observation") or {}).get("blocked_reason") else "RECONNECTING"
@@ -262,6 +275,8 @@ def bench_operation(function):
         motor = getattr(app.state, "motor_replay", None)
         if motor is not None and motor.active:
             raise HTTPException(status_code=409, detail="Motor SET replay is active. Use Cancel & 1000 us; native STOP outputs 1500 us")
+        if motor is not None and motor.recovery() is not None and function.__name__ in {"upload_to_bench", "start_bench", "control_bench", "set_pulse", "restart_recovery"}:
+            raise HTTPException(status_code=409, detail="Saved motor recovery is waiting. Use motor low/resume controls or start a newly reviewed motor profile; native servo controls can produce 1500 us")
         monitor = getattr(app.state, "monitor", None)
         context = monitor.operation() if monitor is not None and monitor.api_database is app.state.database else nullcontext()
         try:
@@ -370,22 +385,30 @@ def upload_to_bench(profile_id: str) -> dict:
         upload_lock.release()
 
 
-def launch_motor_commands(canonical, profile_id, cycles):
+def launch_motor_commands(canonical, profile_id, cycles, *, max_us=1100, resume=None):
     motor, monitor, bench = app.state.motor_replay, app.state.monitor, app.state.bench
     bench.refresh()
     monitor.validate_identity(bench.snapshot())
     if int((bench.info or {}).get("ch", 0)) != 4 or (bench.status or {}).get("state") != "STOPPED":
         raise BenchError("Motor sending requires a stopped four-channel bench; no STOP is sent")
-    motor.reserve(profile_id, len(canonical["frames"]) * cycles if canonical else 0)
+    motor.reserve(profile_id, len(canonical["frames"]) * cycles if canonical else 0,
+                  frames_per_pass=len(canonical["frames"]) if canonical else None,
+                  rate_hz=canonical["rate_hz"] if canonical else None,
+                  requested_passes=cycles if canonical else None,
+                  context={"max_us": max_us, "tcp": app.state.desired_tcp,
+                           "capabilities": monitor.expected_capabilities,
+                           "profile_sha256": profile_row(profile_id)["sha256"] if profile_id else None},
+                  resume=resume)
     def worker():
         try:
             with monitor.io_lock:
                 with monitor.operation():
                     app.state.history.notice("motor_set_requested", {"profile_id": profile_id, "cycles": cycles, "mode": "HOST_SET"})
-                    motor.run(bench, canonical, cycles, monitor.capture)
+                    motor.run(bench, canonical, cycles, monitor.capture,
+                              start_frame=resume["acknowledged_frames"] if resume else 0)
                     app.state.history.notice("motor_set_finished", motor.snapshot())
         except Exception as error:
-            motor.update(active=False, phase="FAILED", error=f"{error}; output return unconfirmed, disconnect motor power")
+            motor.finish(phase="FAILED", error=f"{error}; output return unconfirmed, disconnect motor power")
     motor.launch(worker)
 
 
@@ -397,7 +420,7 @@ def start_motor_replay(request: MotorRunRequest):
     row = profile_row(request.profile_id)
     canonical = json.loads(row["canonical_json"])
     MotorReplay.validate(canonical, row["sum16"], request.max_us)
-    launch_motor_commands(canonical, row["id"], request.cycles)
+    launch_motor_commands(canonical, row["id"], request.cycles, max_us=request.max_us)
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
@@ -411,6 +434,38 @@ def idle_motors():
 @app.post("/api/v1/motors/cancel")
 def cancel_motor_replay():
     app.state.motor_replay.cancel()
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/motors/recovery/resume")
+@bench_operation
+def resume_motor_replay(request: MotorResumeRequest):
+    recovery = app.state.motor_replay.recovery()
+    if recovery is None or recovery["run_id"] != request.run_id:
+        raise HTTPException(status_code=409, detail="This motor recovery is no longer current")
+    if not request.hardware_recovery_confirmed or not request.uncertainty_acknowledged:
+        raise HTTPException(status_code=422, detail="Verify missing-PWM ESC failsafe, protection from 1500-us boot output, removed props/secured drone/power cutoff, and accept partial-frame uncertainty before resuming")
+    bench, monitor = app.state.bench, app.state.monitor
+    bench.refresh()
+    monitor.validate_identity(bench.snapshot())
+    context = recovery["context"]
+    info = bench.info or {}
+    capabilities = {key: info.get(key) for key in ("proto", "team", "ch", "maxframes")}
+    # JSON checkpoints turn tuples into lists; normalize the current endpoint.
+    if context["capabilities"] != capabilities or list(context["tcp"] or []) != list(app.state.desired_tcp or []):
+        raise HTTPException(status_code=409, detail="Motor recovery bench endpoint or capabilities changed; do not resume")
+    if (bench.status or {}).get("state") != "STOPPED" or (bench.status or {}).get("us") != "1000,1000,1000,1000":
+        raise HTTPException(status_code=409, detail="Before resuming, isolate motor power and request/read back 1000 us on all four outputs")
+    row = profile_row(recovery["profile_id"])
+    if row["sha256"] != context["profile_sha256"]:
+        raise HTTPException(status_code=409, detail="Saved motor profile identity changed")
+    canonical = json.loads(row["canonical_json"])
+    MotorReplay.validate(canonical, row["sum16"], context["max_us"])
+    if not 1 <= recovery["requested_passes"] <= 100 or recovery["frames_per_pass"] != len(canonical["frames"]) or recovery["total_frames"] != len(canonical["frames"]) * recovery["requested_passes"] or not 0 <= recovery["acknowledged_frames"] <= recovery["total_frames"]:
+        raise HTTPException(status_code=409, detail="Saved motor cursor does not match the immutable profile")
+    app.state.history.notice("motor_resume_approved", {"run_id": request.run_id,
+        "next_frame": recovery["acknowledged_frames"], "partial_frame_uncertain": recovery.get("in_flight_frame") is not None})
+    launch_motor_commands(canonical, row["id"], recovery["requested_passes"], max_us=context["max_us"], resume=recovery)
     return current_snapshot(app.state.database, app.state.instance_id)
 
 

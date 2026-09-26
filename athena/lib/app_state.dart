@@ -132,6 +132,8 @@ class AppState extends ChangeNotifier {
       _operate(() => _api.startMotors(id, cycles, maxUs));
   Future<void> cancelMotors() => _operate(_api.cancelMotors);
   Future<void> idleMotors() => _operate(_api.idleMotors);
+  Future<void> resumeMotorRecovery(String id) =>
+      _operate(() => _api.resumeMotorRecovery(id));
 
   Future<void> loadHistory({String? fromDate, String? throughDate}) async {
     if (_disposed || historyLoading) return;

@@ -89,7 +89,10 @@ void main() {
         ),
       ),
     );
-    expect(find.text('1000 µs readback: not confirmed'), findsOneWidget);
+    expect(
+      find.text('Last motor action 1000 µs readback: not confirmed'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Cancel & request 1000 µs'));
     expect(cancelled, isTrue);
     expect(tester.takeException(), isNull);

@@ -60,13 +60,54 @@ def main():
                 cancelled = finished(client)
                 assert cancelled["phase"] == "CANCELLED" and cancelled["low_signal_confirmed"], cancelled
                 results["cancel_returns_low"] = cancelled
-                simulator.drop_reply_for = "SET 1 "
                 request(client, "post", "motors/start", json=payload)
+                time.sleep(.15)
+                simulator.drop_reply_for = "SET 1 1040"
                 failed = finished(client)
                 assert failed["phase"] == "FAILED" and not failed["low_signal_confirmed"], failed
+                recovery = failed["recovery"]
+                assert recovery and 0 < recovery["acknowledged_frames"] < 50 and recovery["partial_frame_uncertain"], failed
                 results["lost_ack_unknown_output"] = failed
-                time.sleep(1.5)
+                # Simulate bench power-cycle after losing the in-flight ACK.
+                simulator.device.reboot()
+                no_throttle_before_approval = len(simulator.commands)
+                until = time.monotonic() + 15
+                while time.monotonic() < until:
+                    snap = request(client, "get", "snapshot")
+                    if snap["motor_monitoring"]["current_all_low_reported"] is True:
+                        break
+                    time.sleep(.05)
+                assert snap["motor_monitoring"]["current_all_low_reported"] is True, snap
                 assert not module.app.state.motor_replay.active
+                assert client.post("/api/v1/bench/stop").status_code == 409
+                assert all(c.split()[2] == "1000" for c in simulator.commands[no_throttle_before_approval:] if c.startswith("SET "))
+                resume_payload = {"run_id": recovery["run_id"], "hardware_recovery_confirmed": True, "uncertainty_acknowledged": True}
+                assert client.post("/api/v1/motors/recovery/resume", json={"run_id": recovery["run_id"]}).status_code == 422
+                # Reinitialize the backend: durable cursor/endpoint restored,
+                # reconnects and waits for approval without throttle commands.
+                restored_before = len(simulator.commands)
+            with TestClient(module.app) as client:
+                until = time.monotonic() + 10
+                while time.monotonic() < until:
+                    snap = request(client, "get", "snapshot")
+                    if snap["motor_monitoring"]["current_all_low_reported"] is True:
+                        break
+                    time.sleep(.05)
+                assert snap["motor_replay"]["recovery"]["acknowledged_frames"] == recovery["acknowledged_frames"]
+                assert not snap["motor_replay"]["active"]
+                assert all(c.split()[2] == "1000" for c in simulator.commands[restored_before:] if c.startswith("SET "))
+                before_resume = len(simulator.commands)
+                request(client, "post", "motors/recovery/resume", json=resume_payload)
+                resumed = finished(client)
+                assert resumed["phase"] == "COMPLETED" and resumed["acknowledged_frames"] == 50 and resumed["low_signal_confirmed"], resumed
+                sent = [c for c in simulator.commands[before_resume:] if c.startswith("SET ")]
+                assert sent[4:-4] == [f"SET {ch} {value}" for frame in canonical["frames"][recovery["acknowledged_frames"]:] for ch, value in enumerate(frame)]
+                assert client.post("/api/v1/motors/recovery/resume", json=resume_payload).status_code == 409
+                results["durable_power_loss_resume_exact_remaining_commands"] = resumed
+                monitoring = request(client, "get", "snapshot")["motor_monitoring"]
+                assert monitoring["current_all_low_reported"] is True
+                assert all(c["physical_pwm_state"] == "UNKNOWN" and c["motor_rpm"] is None for c in monitoring["channels"])
+                results["monitoring_honest_without_receiver"] = monitoring
                 assert not any(c.split()[0] in {"STOP", "START", "LOAD", "F", "COMMIT", "CLEAR", "RESUME"} for c in simulator.commands[before:])
                 results["no_native_motion_commands_or_counter_changes"] = True
         finally:

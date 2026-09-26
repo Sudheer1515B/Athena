@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'history_page.dart';
-import 'live_trace.dart';
 import 'profile_page.dart';
 import 'theme.dart';
 import 'receiver_feedback.dart';
+import 'motor_monitoring.dart';
+import 'motor_recovery.dart';
 
 void main() => runApp(const MyApp());
 
@@ -125,6 +126,25 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.snapshot?.motorReplay?['recovery'] is Map)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: MotorRecovery(
+                recovery: Map<String, dynamic>.from(
+                  widget.state.snapshot!.motorReplay!['recovery'] as Map,
+                ),
+                ready:
+                    widget.state.benchLive &&
+                    widget.state.snapshot?.benchState?['state'] == 'STOPPED' &&
+                    widget
+                            .state
+                            .snapshot
+                            ?.motorMonitoring?['current_all_low_reported'] ==
+                        true,
+                busy: widget.state.benchBusy,
+                onResume: widget.state.resumeMotorRecovery,
+              ),
+            ),
           if (widget.state.motorActive)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -664,15 +684,13 @@ class _AthenaShellState extends State<AthenaShell> {
         ),
       ),
       const SizedBox(height: 18),
-      BenchCard(
-        title: widget.state.benchLive
-            ? 'Commanded PWM · bench STATUS'
-            : 'Commanded PWM · unavailable / stale',
-        child: LiveTrace(
-          samples: widget.state.benchLive
-              ? widget.state.snapshot?.trace ?? const []
-              : const [],
-        ),
+      MotorMonitoring(
+        data: widget.state.snapshot?.motorMonitoring,
+        samples: widget.state.snapshot?.trace ?? const [],
+        backendLive: widget.state.serviceLive,
+        busy: widget.state.loading,
+        onCancel: widget.state.cancelMotors,
+        onIdle: widget.state.idleMotors,
       ),
     ],
   );

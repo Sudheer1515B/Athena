@@ -172,7 +172,7 @@ class _MotorSendState extends State<MotorSend> {
               '${widget.progress!['phase']} · ${widget.progress!['acknowledged_frames']}/${widget.progress!['total_frames']} frames acknowledged · ${widget.progress!['elapsed_s']} s',
             ),
             Text(
-              '1000 µs readback: ${widget.progress!['low_signal_confirmed'] == true ? 'confirmed by bench' : 'not confirmed'}',
+              'Last motor action 1000 µs readback: ${widget.progress!['low_signal_confirmed'] == true ? 'confirmed by bench' : 'not confirmed'}',
             ),
             if (widget.progress!['error'] != null)
               Text(
