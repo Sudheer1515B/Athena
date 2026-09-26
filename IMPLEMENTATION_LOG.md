@@ -416,6 +416,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - User suggests Readytosky 40A. Checked manufacturer product pages: both 2–4S/5V3A-BEC and 2–6S OPTO/no-BEC variants exist. Exact variant, zero/arming pulse and 3.3-V compatibility remain unconfirmed; added primary-source links and unresolved details to `ACTUATOR_BRINGUP.md`.
 - No software changes, firmware changes, calibration or motor commands. A tentative brand/current rating does not resolve WDR's 1500-us idle/STOP/completion mismatch.
 
+## Entry 030 — 26 September 2026 — authorized OUT0 probe, connection unavailable
+
+- User corrected ESC identity to Readytofly 40A; no verified primary model manual found. Readytosky specifications are superseded and cannot be applied. User confirmed props removed, motors secured and attended power cutoff, authorized output test, then narrowed it to OUT0 only.
+- Prepared `scripts/esc_pulse_probe.py`: stopped WDR_REFERENCE preflight, OUT0 1000 us/3 s, 1100 us/2 s, return OUT0 to 1000 us, no WDR STOP/LOAD/START/CLEAR/firmware operation, other channels untouched. Conventional PWM low input is a trial, not proven model-specific neutral. Physical power cutoff remains essential.
+- First network attempt timed out at 10.178.45.105:3333 before handshake/output commands. No channels were commanded. Asked for current bench IP; local backend absent and Mac lists no ESP32 USB adapters. Motion remains pending reachability.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

@@ -56,3 +56,11 @@ User reports “Readytosky 40A?”; treat brand/current as tentative, not a conf
 - [2–6S 40A OPTO, no BEC](https://www.readytosky.com/e_productshow/?301-Readytosky-2-6S-40A-Electronic-Speed-Controller-301.html=), product 201758105925; manufacturer describes throttle refresh rates up to 621 Hz, but does not establish the exact team's unit, its low-throttle endpoint or 1500-us stop behavior.
 
 The manufacturer pages checked do not provide a verified model-specific arming/zero-throttle pulse or 3.3-V input threshold. Do not infer either from current rating or another manufacturer's manual. Obtain label/packaging details and the actual supplied instructions. Keep the fixed bench's 1500-us idle incompatibility unresolved until verified. No ESC calibration or live command was issued during research.
+
+## Corrected identity and OUT0-only test
+
+User corrected the brand to **Readytofly 40A**, superseding the tentative Readytosky identification above. Exact manufacturer instructions, voltage range and low/arming endpoints remain unverified; the Readytosky variant specifications do not apply to this unit.
+
+User explicitly confirmed propellers removed, motors secured and an attended motor-power cutoff, then authorized an **OUT0-only** brief output probe. `scripts/esc_pulse_probe.py --run` now commands only OUT0: typical PWM low 1000 us for 3 s, 1100 us for 2 s, then 1000 us. OUT1–OUT3 are untouched, not guaranteed stopped. This is a limited compatibility trial using conventional PWM values, not a verified model-specific arming/calibration routine. It never uploads, flashes, clears counters or sends WDR STOP. Disconnect motor power before any bench reset/upload/Stop because firmware can output 1500 us. Do not run other controllers against the bench during this direct probe.
+
+The first attempted connection to `10.178.45.105:3333` timed out **before any output command**. No motor test has occurred. Athena was not listening on local port 8080 and no ESP32 USB adapters were present on the Mac at that check. Current bench IP/reachability is required before retry.
