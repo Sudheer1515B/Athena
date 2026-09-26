@@ -323,6 +323,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Added a bottom-up white reveal to the four read-only dashboard metric tiles. Each tile shows a dark-text copy of its content over the rising panel on hover; other tiles remain dark. The animation reverses on pointer exit and excludes the overlay copy from accessibility semantics.
 - Flutter analysis reported no issues; seven widget tests passed, including mouse enter/exit reveal behavior and compact-header layout. The release web build succeeded. A 1440×900 local browser screenshot confirmed the dashboard layout and contrast while the backend was offline. No bench was contacted or modified for this styling work.
 
+## Entry 015 — 26 September 2026 — Double-click Mac demo launchers
+
+- Added executable `Start Simulator Demo.command` and `Start Wi-Fi Hardware Proof.command`, backed by `scripts/demo_launcher.py`. Both check prerequisites/occupied ports, start Athena locally, open its browser page, show where logs are saved, and stop only their own child processes on exit.
+- The simulator launcher also starts the supplied WDR simulator and connects Athena to the verified `team=SIM` service. The hardware launcher detects the CH340 receiver USB identity and streams only its serial PWM measurements; the WDR may use an external USB power supply. Wi-Fi connection, profile upload, and finite START remain explicit Athena UI actions. Neither launcher flashes firmware or clears counters.
+- Updated `PROTOTYPE_DEMO.md` with double-click instructions and close keys. Shell syntax and Python compilation checks passed. A simulator smoke run started both services, connected to SIM, passed backend health, and shut down cleanly. A hardware-mode smoke run identified `/dev/cu.usbserial-10`, started/stopped Athena, and did not open the WDR bench or start a replay. The interactive receiver monitor and browser-open step were not exercised in the smoke check.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

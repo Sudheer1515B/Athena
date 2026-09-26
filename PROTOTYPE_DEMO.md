@@ -2,6 +2,13 @@
 
 The main demo uses the organizer's **supplied simulator** and Flutter dashboard. It proves the flight-log → profile → WDR upload → replay → live pulse graph → durable session/counter history flow without requiring physical hardware during judging. A separate real Wi-Fi run has now verified a short 200-frame Athena profile and all four physical PWM outputs; its evidence is saved, so it need not be repeated live.
 
+## Double-click launchers on this Mac
+
+- Double-click [Start Simulator Demo.command](Start%20Simulator%20Demo.command) for the main demo. It starts the supplied simulator and Athena backend, connects Athena to `team=SIM`, then opens the dashboard. Follow the Profile and replay sequence below. Press **Enter in the launcher Terminal window** when finished; it stops only the processes it started.
+- Double-click [Start Wi-Fi Hardware Proof.command](Start%20Wi-Fi%20Hardware%20Proof.command) for the physical proof. The second ESP32 (CH340 receiver) must be connected to the Mac by USB; the WDR bench may be powered by a separate USB supply. The launcher verifies the receiver identity, starts Athena, opens the dashboard, and shows measured PWM lines in its Terminal window. It does **not** open the WDR USB serial port, connect the WDR over Wi-Fi, upload, START, STOP, or clear counters. In Athena, choose **Settings → Connect Wi-Fi bench** using its current IP, then deliberately upload/start a finite profile. Press **Ctrl-C in the launcher Terminal window** to close the receiver monitor and backend.
+
+Both launchers require the existing `.venv` and Flutter web build (`athena/build/web/index.html`). If the build is missing, run `cd athena && flutter build web` once. They refuse to start if their local ports are already occupied, and write backend/simulator logs under `var/demo/`. Use one launcher at a time, and wait until a run has stopped before closing its launcher window so Athena can save the final observation. On macOS, Finder may ask you to confirm opening a newly created `.command` file.
+
 ## Start two local services
 
 From the workspace root, in Terminal A:
