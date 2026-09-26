@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="10.178.45.105")
     parser.add_argument("--run", action="store_true", help="Props removed, motors secured, power cutoff attended: issue the pulse probe")
+    parser.add_argument("--set-only", action="store_true", help="With --run, set only OUT0 to 1000 us; do not perform the 1100-us test")
     args = parser.parse_args()
     bench = TcpBench(expected_team="WDR_REFERENCE")
     armed = False
@@ -25,6 +26,10 @@ def main():
             raise RuntimeError("Requires four-channel WDR_REFERENCE already STOPPED; no Stop will be sent")
         if not args.run:
             print("Read-only preflight complete. No output command sent.", flush=True)
+            return
+        if args.set_only:
+            bench.set_pulse(0, 1000)
+            print("OUT0 set to 1000 us. OUT1–OUT3 untouched; no STOP sent.", flush=True)
             return
         armed = True
         bench.set_pulse(0, 1000)

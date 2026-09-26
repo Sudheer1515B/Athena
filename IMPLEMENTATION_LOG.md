@@ -422,6 +422,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Prepared `scripts/esc_pulse_probe.py`: stopped WDR_REFERENCE preflight, OUT0 1000 us/3 s, 1100 us/2 s, return OUT0 to 1000 us, no WDR STOP/LOAD/START/CLEAR/firmware operation, other channels untouched. Conventional PWM low input is a trial, not proven model-specific neutral. Physical power cutoff remains essential.
 - First network attempt timed out at 10.178.45.105:3333 before handshake/output commands. No channels were commanded. Asked for current bench IP; local backend absent and Mac lists no ESP32 USB adapters. Motion remains pending reachability.
 
+## Entry 031 — 26 September 2026 — OUT0 set to 1000 us
+
+- User narrowed the command to setting OUT0 to 1000 us only. Added `--set-only` to the explicit ESC probe, skipping the 1100-us test and leaving other channels untouched.
+- Wi-Fi connection succeeded at 10.178.45.105:3333: WDR_REFERENCE, proto=1, four channels, maxframes=8000, uptime44, STOPPED, committed frames1200 and pre-command pulses1500 on all four outputs. Sent only `SET 0 1000` and observation/time-sync commands; SET and subsequent refresh succeeded. No WDR STOP/LOAD/START/CLEAR or firmware change.
+- OUT1–OUT3 were left at their prior values (1500 us), not commanded to stop. No independent receiver or motor-motion observation was available; this establishes bench command acknowledgement, not an assertion of motor stop or rotation.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:
