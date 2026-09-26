@@ -533,7 +533,9 @@ class _AthenaShellState extends State<AthenaShell> {
       children: [
         const Text(
           'WDR Protocol v1 · USB bench or local simulator',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Palette.ink,
+            fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         const Text(
@@ -601,6 +603,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'Bench IP or hostname',
+                  labelStyle: TextStyle(color: Palette.secondary),
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),

@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 
 class Palette {
-  static const background = Color(0xFFF4F4F2);
-  static const card = Colors.white;
-  static const ink = Color(0xFF0B0B0B);
-  static const secondary = Color(0xFF52514E);
-  static const muted = Color(0xFF8A8985);
-  static const line = Color(0xFFE3E2DE);
-  static const brand = Color(0xFFC8302E);
-  static const good = Color(0xFF0CA30C);
-  static const critical = Color(0xFFD03B3B);
+  static const background = Color.fromRGBO(0, 0, 0, 0);
+  static const card = Color.fromRGBO(0, 0, 0, 1);
+  static const ink = Color.fromRGBO(247, 243, 243, 1);
+  static const secondary = Color.fromRGBO(255, 255, 255, 1);
+  static const muted = Color.fromRGBO(224, 220, 107, 1);
+  static const line = Color.fromRGBO(255, 204, 0, 1);
+  static const brand = Color.fromRGBO(200, 48, 46, 1);
+  static const good = Color.fromRGBO(12, 163, 12, 1);
+  static const critical = Color.fromRGBO(208, 59, 59, 1);
+
   static const series = [
-    Color(0xFF2A78D6),
-    Color(0xFFEB6834),
-    Color(0xFF1BAF7A),
-    Color(0xFF8D63BD),
+    Color.fromRGBO(42, 120, 214, 1),
+    Color.fromRGBO(235, 104, 52, 1),
+    Color.fromRGBO(27, 175, 122, 1),
+    Color.fromRGBO(141, 99, 189, 1),
   ];
 }
 
@@ -45,7 +46,7 @@ class BenchCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: Palette.card,
       border: Border.all(color: Palette.line),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(0),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
