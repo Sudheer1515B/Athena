@@ -14,6 +14,8 @@ class AppState extends ChangeNotifier {
   bool loading = false;
   bool uploading = false;
   bool historyLoading = false;
+  bool get motorActive => snapshot?.motorReplay?['active'] == true;
+  bool get benchBusy => loading || motorActive;
   String? historyError;
   List<Map<String, dynamic>> historySessions = const [];
   List<Map<String, dynamic>> historyEvents = const [];
@@ -126,6 +128,10 @@ class AppState extends ChangeNotifier {
       _operate(() => _api.uploadProfile(id), uploadingProfile: true);
   Future<void> control(String action, {int cycles = 1}) =>
       _operate(() => _api.control(action, cycles: cycles));
+  Future<void> startMotors(String id, int cycles, int maxUs) =>
+      _operate(() => _api.startMotors(id, cycles, maxUs));
+  Future<void> cancelMotors() => _operate(_api.cancelMotors);
+  Future<void> idleMotors() => _operate(_api.idleMotors);
 
   Future<void> loadHistory({String? fromDate, String? throughDate}) async {
     if (_disposed || historyLoading) return;

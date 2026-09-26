@@ -14,7 +14,7 @@ from dataclasses import dataclass
 MAX_SOURCE_BYTES = 50 * 1024 * 1024
 MAX_SOURCE_ROWS = 500_000
 IDLE_US = 1500
-COMPILER_VERSION = 1
+COMPILER_VERSION = 2
 CHANNEL_NAME = re.compile(r"C(?:[1-9]|1[0-6])\Z")
 
 
@@ -162,8 +162,10 @@ def compile_profile(
                 raise ProfileIssue("mapping", f"Invalid or duplicate source {source}")
             assigned.add(source)
         low, high = item.get("min_us", 500), item.get("max_us", 2500)
-        if not isinstance(low, int) or not isinstance(high, int) or not 500 <= low <= 1500 <= high <= 2500:
+        if not isinstance(low, int) or not isinstance(high, int) or not 500 <= low <= high <= 2500:
             raise ProfileIssue("limits", f"Invalid pulse limits for OUT{item['output']}")
+        if source is None and not low <= IDLE_US <= high:
+            raise ProfileIssue("limits", f"Unmapped OUT{item['output']} emits 1500 us, outside its limits")
         for key in ("label", "serial"):
             if item.get(key) is not None and (not isinstance(item[key], str) or len(item[key]) > 120):
                 raise ProfileIssue("mapping", f"Invalid {key} for OUT{item['output']}")

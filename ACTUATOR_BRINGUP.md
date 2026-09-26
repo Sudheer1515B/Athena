@@ -1,5 +1,7 @@
 # Four-actuator bring-up
 
+Latest motor integration: see [MOTOR_COMMAND_DEMO.md](MOTOR_COMMAND_DEMO.md). The team now confirms four connected drone motor/ESC inputs, removed props, secured assembly, attended power cutoff, 1000 µs stop and 2000 µs full throttle. Motor commands use host-timed SET playback with a reviewed ceiling and low readback; native servo replay remains unsuitable for assuming automatic motor stop. Earlier pending/bring-up entries below are historical.
+
 Status: the team is preparing four real actuators. Models, power supply, driver/ESC requirements and safe pulse/travel limits are pending confirmation. Software already supports four PWM outputs and independent receiver measurements. Do not treat the prior signal-only validation as validation with real actuator loads.
 
 Update: user confirms **drone motors**; ESC models and power details remain unknown. Assume this is not a positional-servo hookup until the hardware team confirms otherwise. Brushless drone motors need ESCs; the bench's ordinary servo PWM cannot be assumed compatible with DShot/OneShot-only ESC configurations.

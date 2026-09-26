@@ -25,6 +25,7 @@ from .bench_usb import BenchError, TcpBench, UsbBench
 from .history import HistoryRecorder
 from .monitor import BenchMonitor
 from .receiver import ReceiverMonitor
+from .motor_replay import MotorReplay
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,9 +52,11 @@ async def lifespan(app: FastAPI):
     app.state.monitor.start()
     app.state.receiver = ReceiverMonitor()
     app.state.receiver.start()
+    app.state.motor_replay = MotorReplay()
     try:
         yield
     finally:
+        app.state.motor_replay.close()
         app.state.receiver.stop()
         app.state.monitor.stop()
         app.state.bench.disconnect()
@@ -114,6 +117,13 @@ class RecoveryRequest(BaseModel):
 class SetPulseRequest(BaseModel):
     channel: int = Field(ge=0, le=15)
     width_us: int = Field(ge=500, le=2500)
+
+
+class MotorRunRequest(BaseModel):
+    profile_id: str
+    cycles: int = Field(default=1, ge=1, le=100)
+    max_us: int = Field(default=1100, ge=1000, le=2000)
+    safety_confirmed: bool = False
 
 
 def bench_error(error: Exception) -> HTTPException:
@@ -197,6 +207,7 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "last_known": live.get("last_known"),
         "receiver": app.state.receiver.snapshot() if getattr(app.state, "receiver", None) else None,
         "recovery": live.get("recovery"),
+        "motor_replay": app.state.motor_replay.snapshot() if getattr(app.state, "motor_replay", None) else None,
     }
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
@@ -248,6 +259,9 @@ def connect_usb_receiver():
 def bench_operation(function):
     @wraps(function)
     def guarded(*args, **kwargs):
+        motor = getattr(app.state, "motor_replay", None)
+        if motor is not None and motor.active:
+            raise HTTPException(status_code=409, detail="Motor SET replay is active. Use Cancel & 1000 us; native STOP outputs 1500 us")
         monitor = getattr(app.state, "monitor", None)
         context = monitor.operation() if monitor is not None and monitor.api_database is app.state.database else nullcontext()
         try:
@@ -354,6 +368,50 @@ def upload_to_bench(profile_id: str) -> dict:
         return current_snapshot(app.state.database, app.state.instance_id)
     finally:
         upload_lock.release()
+
+
+def launch_motor_commands(canonical, profile_id, cycles):
+    motor, monitor, bench = app.state.motor_replay, app.state.monitor, app.state.bench
+    bench.refresh()
+    monitor.validate_identity(bench.snapshot())
+    if int((bench.info or {}).get("ch", 0)) != 4 or (bench.status or {}).get("state") != "STOPPED":
+        raise BenchError("Motor sending requires a stopped four-channel bench; no STOP is sent")
+    motor.reserve(profile_id, len(canonical["frames"]) * cycles if canonical else 0)
+    def worker():
+        try:
+            with monitor.io_lock:
+                with monitor.operation():
+                    app.state.history.notice("motor_set_requested", {"profile_id": profile_id, "cycles": cycles, "mode": "HOST_SET"})
+                    motor.run(bench, canonical, cycles, monitor.capture)
+                    app.state.history.notice("motor_set_finished", motor.snapshot())
+        except Exception as error:
+            motor.update(active=False, phase="FAILED", error=f"{error}; output return unconfirmed, disconnect motor power")
+    motor.launch(worker)
+
+
+@app.post("/api/v1/motors/start")
+@bench_operation
+def start_motor_replay(request: MotorRunRequest):
+    if not request.safety_confirmed:
+        raise HTTPException(status_code=422, detail="Confirm removed propellers, secured drone, attended motor-power cutoff and 1000-us low input")
+    row = profile_row(request.profile_id)
+    canonical = json.loads(row["canonical_json"])
+    MotorReplay.validate(canonical, row["sum16"], request.max_us)
+    launch_motor_commands(canonical, row["id"], request.cycles)
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/motors/idle")
+@bench_operation
+def idle_motors():
+    launch_motor_commands(None, None, 1)
+    return current_snapshot(app.state.database, app.state.instance_id)
+
+
+@app.post("/api/v1/motors/cancel")
+def cancel_motor_replay():
+    app.state.motor_replay.cancel()
+    return current_snapshot(app.state.database, app.state.instance_id)
 
 
 @app.post("/api/v1/bench/start")

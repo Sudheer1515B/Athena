@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'bench_api.dart';
 import 'theme.dart';
+import 'motor_send.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({
@@ -17,6 +18,10 @@ class ProfilePage extends StatefulWidget {
     required this.benchChannelCount,
     required this.benchMaxFrames,
     required this.onUpload,
+    this.motorProgress,
+    this.onMotorRun,
+    this.onMotorCancel,
+    this.onMotorIdle,
   });
   final BenchApi api;
   final bool benchConnected;
@@ -25,6 +30,9 @@ class ProfilePage extends StatefulWidget {
   final int benchChannelCount;
   final int benchMaxFrames;
   final Future<void> Function(String) onUpload;
+  final Map<String, dynamic>? motorProgress;
+  final Future<void> Function(String, int, int)? onMotorRun;
+  final Future<void> Function()? onMotorCancel, onMotorIdle;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -35,6 +43,20 @@ class _ProfilePageState extends State<ProfilePage> {
   final endController = TextEditingController(text: '44');
   final rateController = TextEditingController(text: '50');
   late List<String?> outputs;
+  final List<TextEditingController> minimums = [];
+  final List<TextEditingController> maximums = [];
+
+  void resizeLimits() {
+    while (minimums.length > outputs.length) {
+      minimums.removeLast().dispose();
+      maximums.removeLast().dispose();
+    }
+    while (minimums.length < outputs.length) {
+      minimums.add(TextEditingController(text: '500'));
+      maximums.add(TextEditingController(text: '2500'));
+    }
+  }
+
   Map<String, dynamic>? source;
   Map<String, dynamic>? profile;
   Map<String, dynamic>? sourceTrace;
@@ -47,6 +69,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     outputs = List<String?>.filled(widget.benchChannelCount, null);
+    resizeLimits();
     restoreRecent();
   }
 
@@ -59,6 +82,7 @@ class _ProfilePageState extends State<ProfilePage> {
         widget.benchChannelCount,
         (index) => index < old.length ? old[index] : null,
       );
+      resizeLimits();
       profile = null;
       profileTrace = null;
       sourceTrace = null;
@@ -105,6 +129,12 @@ class _ProfilePageState extends State<ProfilePage> {
             outputs[i] = i < map.length
                 ? (map[i] as Map)['source']?.toString()
                 : null;
+            minimums[i].text = i < map.length
+                ? ((map[i] as Map)['min_us'] ?? 500).toString()
+                : '500';
+            maximums[i].text = i < map.length
+                ? ((map[i] as Map)['max_us'] ?? 2500).toString()
+                : '2500';
           }
         } else {
           final suppliedSample =
@@ -147,6 +177,9 @@ class _ProfilePageState extends State<ProfilePage> {
     startController.dispose();
     endController.dispose();
     rateController.dispose();
+    for (final controller in [...minimums, ...maximums]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -235,8 +268,8 @@ class _ProfilePageState extends State<ProfilePage> {
               'output': i,
               'source': outputs[i],
               'label': outputs[i] ?? 'OUT$i',
-              'min_us': 500,
-              'max_us': 2500,
+              'min_us': int.parse(minimums[i].text.trim()),
+              'max_us': int.parse(maximums[i].text.trim()),
             },
         ],
       });
@@ -265,6 +298,28 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> uploadCompiledProfile() async {
     if (uploading || profile == null) return;
+    if (widget.transport != 'SIMULATOR') {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Native servo profile upload'),
+          content: const Text(
+            'This upload sends STOP, producing 1500 µs on every output. Native replay also ends at 1500 µs. Disconnect ESC/motor power before uploading. For powered drone motors use Motor commands instead.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Motor power is disconnected'),
+            ),
+          ],
+        ),
+      );
+      if (approved != true || !mounted) return;
+    }
     setState(() => uploading = true);
     try {
       await widget.onUpload(profile!['id'].toString());
@@ -297,6 +352,18 @@ class _ProfilePageState extends State<ProfilePage> {
         _trimCard(),
         const SizedBox(height: 18),
         _uploadCard(),
+        if (widget.onMotorRun != null) ...[
+          const SizedBox(height: 18),
+          MotorSend(
+            profile: profile,
+            progress: widget.motorProgress,
+            connected: widget.benchConnected,
+            busy: widget.benchBusy,
+            onRun: widget.onMotorRun!,
+            onCancel: widget.onMotorCancel!,
+            onIdle: widget.onMotorIdle!,
+          ),
+        ],
       ],
     );
     final right = Column(
@@ -553,8 +620,30 @@ class _ProfilePageState extends State<ProfilePage> {
                           },
                   ),
                 ),
-                const SizedBox(width: 90, child: Text('500')),
-                const SizedBox(width: 90, child: Text('2500')),
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    controller: minimums[i],
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => invalidateDraft(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: 'OUT$i min',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    controller: maximums[i],
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => invalidateDraft(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: 'OUT$i max',
+                    ),
+                  ),
+                ),
                 SizedBox(
                   width: 95,
                   child: Text(
@@ -571,6 +660,19 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: busy
+              ? null
+              : () {
+                  for (var i = 0; i < outputs.length; i++) {
+                    minimums[i].text = '1000';
+                    maximums[i].text = '2000';
+                  }
+                  invalidateDraft();
+                },
+          child: const Text('Use confirmed motor range · 1000–2000 µs'),
+        ),
         const SizedBox(height: 8),
         const Text(
           'Unmapped outputs stay at the fixed 1500 µs idle. '

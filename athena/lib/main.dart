@@ -125,6 +125,26 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.motorActive)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Motor SET replay · ${widget.state.snapshot!.motorReplay!['acknowledged_frames']}/${widget.state.snapshot!.motorReplay!['total_frames']} frames · keep Wi-Fi connected',
+                      style: const TextStyle(color: Palette.brand),
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed: widget.state.loading
+                        ? null
+                        : widget.state.cancelMotors,
+                    child: const Text('Cancel & 1000 µs'),
+                  ),
+                ],
+              ),
+            ),
           if (widget.state.snapshot?.recovery != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -190,7 +210,7 @@ class _AthenaShellState extends State<AthenaShell> {
                         _dashboard(),
                         ProfilePage(
                           api: widget.state.api,
-                          benchBusy: widget.state.loading,
+                          benchBusy: widget.state.benchBusy,
                           benchConnected: widget.state.benchLive,
                           transport: widget
                               .state
@@ -219,6 +239,10 @@ class _AthenaShellState extends State<AthenaShell> {
                               ) ??
                               8000,
                           onUpload: widget.state.uploadProfile,
+                          motorProgress: widget.state.snapshot?.motorReplay,
+                          onMotorRun: widget.state.startMotors,
+                          onMotorCancel: widget.state.cancelMotors,
+                          onMotorIdle: widget.state.idleMotors,
                         ),
                         HistoryPage(state: widget.state),
                         _settings(),
@@ -575,7 +599,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 ),
                 FilledButton(
                   onPressed:
-                      widget.state.loading ||
+                      widget.state.benchBusy ||
                           !widget.state.benchLive ||
                           widget.state.snapshot?.profile == null ||
                           widget.state.snapshot?.benchState?['state'] !=
@@ -595,7 +619,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 ),
                 OutlinedButton(
                   onPressed:
-                      widget.state.loading ||
+                      widget.state.benchBusy ||
                           !widget.state.benchLive ||
                           widget.state.snapshot?.benchState?['state'] !=
                               'RUNNING'
@@ -605,7 +629,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 ),
                 OutlinedButton(
                   onPressed:
-                      widget.state.loading ||
+                      widget.state.benchBusy ||
                           !widget.state.benchLive ||
                           widget.state.snapshot?.benchState?['state'] !=
                               'PAUSED'
@@ -615,17 +639,17 @@ class _AthenaShellState extends State<AthenaShell> {
                 ),
                 FilledButton(
                   onPressed:
-                      widget.state.loading ||
+                      widget.state.benchBusy ||
                           widget.state.snapshot?.connectionState != 'CONNECTED'
                       ? null
                       : () => widget.state.control('stop'),
-                  child: const Text('■ Stop'),
+                  child: const Text('■ Stop · 1500 µs'),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             const Text(
-              'Upload a compiled profile, then start a finite cycle. Verify actuator power, common ground and mechanical clearance first.',
+              'Native servo replay ends at 1500 µs. For powered drone motors, use Profile → Motor commands; native Stop is not motor disarming.',
               style: TextStyle(color: Palette.muted, fontSize: 12.5),
             ),
           ],

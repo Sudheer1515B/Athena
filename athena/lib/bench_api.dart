@@ -22,6 +22,7 @@ class BenchSnapshot {
     this.operation,
     this.receiver,
     this.recovery,
+    this.motorReplay,
   });
 
   final String connectionState;
@@ -40,6 +41,7 @@ class BenchSnapshot {
   final Map<String, dynamic>? operation;
   final Map<String, dynamic>? receiver;
   final Map<String, dynamic>? recovery;
+  final Map<String, dynamic>? motorReplay;
   bool get isFresh => observation?['fresh'] != false;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
@@ -94,6 +96,9 @@ class BenchSnapshot {
           : null,
       recovery: json['recovery'] is Map
           ? Map<String, dynamic>.from(json['recovery'] as Map)
+          : null,
+      motorReplay: json['motor_replay'] is Map
+          ? Map<String, dynamic>.from(json['motor_replay'] as Map)
           : null,
     );
   }
@@ -332,6 +337,33 @@ class BenchApi {
       BenchSnapshot.fromJson(
         _decodeObject(await _client.post(endpoint('bench/upload/$profileId'))),
       );
+
+  Future<BenchSnapshot> startMotors(
+    String profileId,
+    int cycles,
+    int maxUs,
+  ) async => BenchSnapshot.fromJson(
+    _decodeObject(
+      await _client.post(
+        endpoint('motors/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'profile_id': profileId,
+          'cycles': cycles,
+          'max_us': maxUs,
+          'safety_confirmed': true,
+        }),
+      ),
+    ),
+  );
+
+  Future<BenchSnapshot> cancelMotors() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('motors/cancel'))),
+  );
+
+  Future<BenchSnapshot> idleMotors() async => BenchSnapshot.fromJson(
+    _decodeObject(await _client.post(endpoint('motors/idle'))),
+  );
 
   Future<BenchSnapshot> control(String action, {int cycles = 1}) async =>
       BenchSnapshot.fromJson(
