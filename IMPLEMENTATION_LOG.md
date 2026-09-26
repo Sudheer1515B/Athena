@@ -361,6 +361,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Athena was running but disconnected. A read-only Wi-Fi check reached `WDR_REFERENCE` at `10.178.45.105:3333`, now STOPPED with 660 committed frames and counters `cycles=32 run_s=307 active_s=194,305,287,289`. Its low reported uptime indicated a recent restart. The expected-3,000-frame check rejected the changed profile; no replay was attempted. Reconnected Athena through its normal Wi-Fi API. Neither firmware was flashed, the bench USB port was not opened, and no upload, START, STOP or counter CLEAR was sent.
 - Updated receiver documentation with the new observed Mac port and explicit unasserted DTR/RTS monitor settings, plus the distinction between the laptop's miniterm heading and receiver output. Windows instructions have not been re-tested on Windows.
 
+## Entry 021 — 26 September 2026 — R1 backend-owned monitoring
+
+- Saved the previously verified upload indicator/receiver diagnostics and `RESILIENCE_IMPLEMENTATION_PLAN.md` in checkpoint commit `6f8b5b8`. The plan covers monitoring, stale UI, identity/reboot recovery, interrupted commands, gap accounting, measured upload progress, draft restoration, Windows receiver launcher and simulator/hardware validation.
+- Added a lifespan-managed one-second backend monitor. Snapshot requests return cached bench observations without network polling; bench mutations and monitoring share a serialized I/O lock, with busy mutations rejected instead of queued. A separate synchronized SQLite HistoryRecorder connection avoids background recording inside profile-import transactions. Startup remains disconnected; shutdown ends the worker without commanding a bench stop.
+- All 21 backend tests passed, including recording completion without browser requests and nonblocking snapshots while another thread holds bench I/O. `scripts/verify_resilience.py` ran the supplied official SimDevice/socket bridge on an isolated loopback port and temporary database: the 200-frame supplied-log profile completed with no snapshot requests, persisted COMPLETED with +1 cycle/+4 run_s, and only one START was sent. Evidence: `/private/tmp/athena-resilience-r1/results.json`. No real bench was connected or changed; the running demo backend has not yet been replaced.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

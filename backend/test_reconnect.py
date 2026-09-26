@@ -56,6 +56,7 @@ class ReconnectTests(unittest.TestCase):
             try:
                 with TestClient(module.app) as client, patch.object(module, "TcpBench", FakeTcpBench):
                     module.app.state.desired_tcp = ("127.0.0.1", 3333, "SIM")
+                    module.app.state.monitor.tick()
                     response = client.get("/api/v1/snapshot")
                     self.assertEqual(response.status_code, 200, response.text)
                     self.assertEqual(response.json()["connection"]["state"], "CONNECTED")

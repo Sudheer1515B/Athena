@@ -10,7 +10,8 @@ import hashlib
 import json
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
+from functools import wraps
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 from .profiles import MAX_SOURCE_BYTES, ProfileIssue, compile_profile, inspect_csv
 from .bench_usb import BenchError, TcpBench, UsbBench
 from .history import HistoryRecorder
+from .monitor import BenchMonitor
 from .storage import SCHEMA_VERSION, database_summary, open_database
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,15 +40,20 @@ async def lifespan(app: FastAPI):
     app.state.database = open_database(DATA_DIR / "athena.sqlite3")
     app.state.instance_id = str(uuid4())
     app.state.bench = UsbBench()
-    app.state.history = HistoryRecorder(app.state.database)
+    history_database = open_database(DATA_DIR / "athena.sqlite3")
+    app.state.history = HistoryRecorder(history_database)
     app.state.upload_lock = threading.Lock()
     app.state.desired_tcp = None
     app.state.reconnect_after = 0.0
     app.state.reconnect_lock = threading.RLock()
+    app.state.monitor = BenchMonitor(app.state, lambda **kwargs: TcpBench(**kwargs))
+    app.state.monitor.start()
     try:
         yield
     finally:
+        app.state.monitor.stop()
         app.state.bench.disconnect()
+        history_database.close()
         app.state.database.close()
 
 
@@ -142,7 +149,11 @@ def profile_response(row: sqlite3.Row) -> dict:
 
 def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
     bench = getattr(app.state, "bench", None)
-    live = bench.snapshot() if bench is not None else {}
+    monitor = getattr(app.state, "monitor", None)
+    if monitor is not None and monitor.api_database is connection:
+        live = monitor.snapshot()
+    else:
+        live = bench.snapshot() if bench is not None else {}
     recorder = getattr(app.state, "history", None)
     if recorder is not None and recorder.database is connection:
         # One SQLite connection is shared by API worker threads. Keep a
@@ -167,6 +178,8 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "time_sync": live.get("time_sync"),
         "simulator_reset_allowed": live.get("simulator_reset_allowed", False),
         "history_counts": counts,
+        "observation": live.get("observation"),
+        "last_known": live.get("last_known"),
     }
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
@@ -188,32 +201,24 @@ def health() -> dict:
 
 @app.get("/api/v1/snapshot")
 def snapshot() -> dict:
-    bench = getattr(app.state, "bench", None)
-    if bench is not None and bench.connected:
-        try:
-            bench.refresh()
-        except BenchError as error:
-            if getattr(app.state, "desired_tcp", None) is None:
-                raise HTTPException(status_code=503, detail=f"Bench did not respond: {error}") from error
-            bench.disconnect()
-            app.state.reconnect_after = time.monotonic() + 3
-    desired = getattr(app.state, "desired_tcp", None)
-    if desired is not None and not app.state.bench.connected and \
-            time.monotonic() >= app.state.reconnect_after:
-        with app.state.reconnect_lock:
-            if not app.state.bench.connected and time.monotonic() >= app.state.reconnect_after:
-                host, port, expected_team = desired
-                replacement = TcpBench(expected_team=expected_team)
-                try:
-                    replacement.connect(host, port)
-                    app.state.bench = replacement
-                    app.state.reconnect_after = 0.0
-                except (BenchError, OSError, ValueError):
-                    app.state.reconnect_after = time.monotonic() + 3
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
+def bench_operation(function):
+    @wraps(function)
+    def guarded(*args, **kwargs):
+        monitor = getattr(app.state, "monitor", None)
+        context = monitor.operation() if monitor is not None and monitor.api_database is app.state.database else nullcontext()
+        try:
+            with context:
+                return function(*args, **kwargs)
+        except BenchError as error:
+            raise bench_error(error) from error
+    return guarded
+
+
 @app.post("/api/v1/bench/usb/connect")
+@bench_operation
 def connect_usb(request: UsbConnectRequest) -> dict:
     try:
         app.state.desired_tcp = None
@@ -226,6 +231,7 @@ def connect_usb(request: UsbConnectRequest) -> dict:
 
 
 @app.post("/api/v1/bench/simulator/connect")
+@bench_operation
 def connect_simulator(request: SimulatorConnectRequest) -> dict:
     try:
         app.state.desired_tcp = None
@@ -239,6 +245,7 @@ def connect_simulator(request: SimulatorConnectRequest) -> dict:
 
 
 @app.post("/api/v1/bench/tcp/connect")
+@bench_operation
 def connect_tcp(request: TcpConnectRequest) -> dict:
     try:
         app.state.desired_tcp = None
@@ -252,6 +259,7 @@ def connect_tcp(request: TcpConnectRequest) -> dict:
 
 
 @app.post("/api/v1/bench/usb/disconnect")
+@bench_operation
 def disconnect_usb() -> dict:
     app.state.desired_tcp = None
     app.state.bench.disconnect()
@@ -264,6 +272,7 @@ def disconnect_bench() -> dict:
 
 
 @app.post("/api/v1/bench/upload/{profile_id}")
+@bench_operation
 def upload_to_bench(profile_id: str) -> dict:
     upload_lock = app.state.upload_lock
     if not upload_lock.acquire(blocking=False):
@@ -282,6 +291,7 @@ def upload_to_bench(profile_id: str) -> dict:
 
 
 @app.post("/api/v1/bench/start")
+@bench_operation
 def start_bench(request: StartRequest) -> dict:
     try:
         app.state.bench.control("start", request.cycles)
@@ -293,6 +303,7 @@ def start_bench(request: StartRequest) -> dict:
 
 
 @app.post("/api/v1/bench/set")
+@bench_operation
 def set_pulse(request: SetPulseRequest) -> dict:
     try:
         app.state.bench.set_pulse(request.channel, request.width_us)
@@ -303,6 +314,7 @@ def set_pulse(request: SetPulseRequest) -> dict:
 
 
 @app.post("/api/v1/bench/time-sync")
+@bench_operation
 def time_sync() -> dict:
     try:
         app.state.bench.sync_time()
@@ -313,6 +325,7 @@ def time_sync() -> dict:
 
 
 @app.post("/api/v1/bench/simulator/clear-counters")
+@bench_operation
 def clear_simulator_counters() -> dict:
     try:
         app.state.bench.clear_simulator_counters()
@@ -323,6 +336,7 @@ def clear_simulator_counters() -> dict:
 
 
 @app.post("/api/v1/bench/{action}")
+@bench_operation
 def control_bench(action: str) -> dict:
     if action not in {"pause", "resume", "stop"}:
         raise HTTPException(status_code=404, detail="Unknown bench control")
