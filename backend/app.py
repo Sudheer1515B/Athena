@@ -172,7 +172,7 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
         "profile": live.get("profile"),
         "session": None,
         "counters": live.get("counters"),
-        "operation": None,
+        "operation": live.get("operation"),
         "recent_events": live.get("recent_events", []),
         "trace": live.get("trace", []),
         "time_sync": live.get("time_sync"),
@@ -304,6 +304,9 @@ def upload_to_bench(profile_id: str) -> dict:
         except (BenchError, OSError) as error:
             raise bench_error(error) from error
         app.state.history.observe(app.state.bench.snapshot(), action="profile_uploaded")
+        monitor = getattr(app.state, "monitor", None)
+        if monitor is not None and monitor.api_database is app.state.database:
+            monitor.recovery_warning = None
         return current_snapshot(app.state.database, app.state.instance_id)
     finally:
         upload_lock.release()
@@ -442,6 +445,7 @@ def export_history(from_date: str | None = None,
         "run_seconds_delta", "active_seconds_delta_by_channel", "confidence", "details",
         "bench_mode", "source_name", "source_sha256", "profile_sha256",
         "stop_cause", "counter_observation_count", "link_gap_observed",
+        "uncertainty_reasons",
     ])
     for session in app.state.history.sessions(-1, start_at=start, end_at=end):
         delta = session.get("delta") or {}
@@ -455,13 +459,14 @@ def export_history(from_date: str | None = None,
             session["bench_mode"], session["source_name"], session["source_sha256"],
             session["profile_sha256"], session["stop_cause"],
             session["observation_count"], session["has_link_gap"],
+            json.dumps(session["uncertainty_reasons"]),
         ]])
     for event in app.state.history.events(-1, start_at=start, end_at=end):
         writer.writerow([_csv_cell(value) for value in [
             "event", event["received_at"], "", event["bench_id"],
             event["session_id"], "", event["kind"], "", "", "", "",
             event["confidence"], json.dumps(event["details"], sort_keys=True),
-            "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "",
         ]])
     return Response(
         content=output.getvalue(), media_type="text/csv; charset=utf-8",

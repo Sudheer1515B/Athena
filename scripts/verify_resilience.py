@@ -115,7 +115,7 @@ def wait_session(recorder, session_id, timeout=15):
     raise AssertionError("Session did not finish/reconcile")
 
 
-def verify(output):
+def verify(output, outage_seconds=6):
     original_dir, original_state = module.DATA_DIR, official.STATE_FILE
     results = {}
     with tempfile.TemporaryDirectory(prefix="athena-resilience-") as directory:
@@ -131,7 +131,27 @@ def verify(output):
                     "rate_hz": 50, "channel_count": 4, "maxframes": 8000,
                     "mapping": [{"output": i, "source": f"C{i+1}"} for i in range(4)],
                 })
-                request(client, "post", f"bench/upload/{profile['id']}")
+                simulator.delay_frames_s = .005
+                upload_errors = []
+                def slow_upload():
+                    try:
+                        request(client, "post", f"bench/upload/{profile['id']}")
+                    except Exception as error:
+                        upload_errors.append(str(error))
+                worker = threading.Thread(target=slow_upload)
+                worker.start()
+                observed_progress = None
+                deadline = time.monotonic() + 5
+                while worker.is_alive() and time.monotonic() < deadline:
+                    progress = request(client, "get", "snapshot")["operation"]
+                    if progress and 0 < progress["acknowledged_frames"] < 200:
+                        observed_progress = progress
+                    time.sleep(.02)
+                worker.join(5)
+                assert not worker.is_alive() and not upload_errors, upload_errors
+                assert observed_progress and not observed_progress["checksum_confirmed"], observed_progress
+                simulator.delay_frames_s = 0
+                results["upload_progress"] = observed_progress
                 request(client, "post", "bench/start", json={"cycles": 1})
                 recorder = module.app.state.history
                 session_id = recorder.sessions()[0]["id"]
@@ -151,6 +171,31 @@ def verify(output):
                 assert recovered["delta"]["cycles"] == 1 and recovered["has_link_gap"], recovered
                 assert len([c for c in simulator.commands if c.startswith("START ")]) == 2
                 results["lost_start_reply"] = recovered
+                # Re-upload deliberately: reconnect does not prove profile identity.
+                request(client, "post", f"bench/upload/{profile['id']}")
+                request(client, "post", "bench/start", json={"cycles": 1})
+                session_id = recorder.sessions()[0]["id"]
+                before_fault = len(simulator.commands)
+                simulator.drop_link()
+                began = time.monotonic()
+                print(f"Blocking bench link for {outage_seconds} seconds; simulator clock continues", flush=True)
+                while time.monotonic() - began < outage_seconds:
+                    time.sleep(min(1, max(.01, outage_seconds - (time.monotonic() - began))))
+                    if int(time.monotonic() - began) % 60 == 0:
+                        print(f"Outage elapsed {time.monotonic() - began:.0f} s", flush=True)
+                stale = request(client, "get", "snapshot")
+                assert stale["connection"]["state"] == "RECONNECTING", stale
+                assert not stale["observation"]["fresh"] and stale["last_known"], stale
+                assert recorder.session_detail(session_id)["ended_at"] is None
+                simulator.blocked = False
+                recovered = wait_session(recorder, session_id, timeout=20)
+                assert recovered["status"] == "COMPLETED" and recovered["has_link_gap"], recovered
+                assert recovered["identity_confidence"] == "uncertain", recovered
+                assert recovered["delta"]["cycles"] == 1 and recovered["delta"]["run_s"] == 4, recovered
+                recovery_commands = simulator.commands[before_fault:]
+                assert not any(c.split()[0] in {"START", "LOAD", "STOP", "CLEAR", "RESUME"} for c in recovery_commands), recovery_commands
+                assert module.app.state.bench.profile_id is None
+                results["long_wifi_outage"] = {"blocked_seconds": outage_seconds, "stale_snapshot": stale, "session": recovered, "recovery_commands": recovery_commands}
                 simulator.drop_reply_for = "F 10 "
                 failed = client.post(f"/api/v1/bench/upload/{profile['id']}")
                 assert failed.status_code == 409, failed.text
@@ -161,6 +206,16 @@ def verify(output):
                 assert denied.status_code == 409, denied.text
                 assert len([c for c in simulator.commands if c.startswith("START ")]) == starts
                 results["interrupted_upload"] = {"http_status": failed.status_code, "verified_profile": None, "automatic_start_sent": False}
+                request(client, "post", f"bench/upload/{profile['id']}")
+                request(client, "post", "bench/start", json={"cycles": 2})
+                session_id = recorder.sessions()[0]["id"]
+                simulator.drop_reply_for = "STOP"
+                stopped = client.post("/api/v1/bench/stop")
+                assert stopped.status_code == 409 and "not confirmed" in stopped.text, stopped.text
+                reconciled = wait_session(recorder, session_id)
+                assert reconciled["has_link_gap"] and reconciled["identity_confidence"] == "uncertain", reconciled
+                assert any(e["kind"] == "command_unconfirmed" and e["details"]["action"] == "stop" for e in reconciled["events"])
+                results["lost_stop_reply"] = reconciled
                 results["command_counts"] = {verb: sum(c.split()[0] == verb for c in simulator.commands)
                                              for verb in ("START", "LOAD", "COMMIT", "CLEAR")}
         finally:
@@ -174,4 +229,8 @@ def verify(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "var/resilience" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
-    verify(parser.parse_args().output_dir)
+    parser.add_argument("--outage-seconds", type=int, default=6)
+    args = parser.parse_args()
+    if args.outage_seconds < 6:
+        parser.error("--outage-seconds must be at least 6")
+    verify(args.output_dir, args.outage_seconds)

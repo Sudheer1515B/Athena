@@ -21,6 +21,14 @@ py -m venv .venv
 
 Find the receiver port:
 
+After setup, you can double-click **Start Windows Receiver.cmd** in the repository root. It selects exactly one CH340 receiver, keeps DTR/RTS unasserted, streams readings, and saves a timestamped capture under `var/demo`. It does not connect to or command the bench. Press **Ctrl-C** to stop it. If two CH340 devices exist, select the known receiver explicitly in PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -u scripts\monitor_receiver.py --port COM3
+```
+
+The launcher has adapter-selection and no-data tests; native Windows execution still needs checking on your laptop. Miniterm remains an alternative below.
+
 ```powershell
 .\.venv\Scripts\python.exe -m serial.tools.list_ports -v
 ```

@@ -56,6 +56,41 @@ class FakeSerial:
 
 
 class UsbBenchTests(unittest.TestCase):
+    def test_upload_progress_stays_readable_while_transport_is_busy(self):
+        import threading
+        device = UsbBench()
+        transport = FakeSerial()
+        device._serial = transport
+        ready, release = threading.Event(), threading.Event()
+        original = device.command
+        def delayed(value):
+            if value == "COMMIT":
+                ready.set()
+                release.wait(2)
+            return original(value)
+        device.command = delayed
+        errors = []
+        def upload():
+            try:
+                device.upload("profile", {"channel_count": 4, "rate_hz": 50,
+                              "frames": [[1500] * 4] * 2}, 12000)
+            except Exception as error:
+                errors.append(error)
+        thread = threading.Thread(target=upload)
+        thread.start()
+        try:
+            self.assertTrue(ready.wait(1))
+            progress = device.upload_progress()
+            self.assertEqual(progress["acknowledged_frames"], 2)
+            self.assertEqual(progress["phase"], "VERIFYING")
+            self.assertFalse(progress["checksum_confirmed"])
+        finally:
+            release.set()
+            thread.join(2)
+        self.assertFalse(errors)
+        self.assertEqual(device.upload_progress()["phase"], "COMPLETED")
+        self.assertTrue(device.upload_progress()["checksum_confirmed"])
+
     def test_upload_verifies_checksum_and_one_finite_cycle(self) -> None:
         device = UsbBench()
         transport = FakeSerial()

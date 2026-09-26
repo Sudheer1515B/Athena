@@ -28,14 +28,31 @@ class AppState extends ChangeNotifier {
       !_pollError &&
       snapshot?.connectionState == 'CONNECTED' &&
       snapshot!.isFresh;
+  String? get uploadDetail {
+    final progress = snapshot?.operation;
+    if (progress == null || progress['kind'] != 'upload') return null;
+    final phase = progress['phase'];
+    final eta = progress['estimated_transfer_remaining_s'];
+    return '${progress['acknowledged_frames']}/${progress['total_frames']} frames acknowledged · '
+        '$phase · ${progress['elapsed_s']} s elapsed'
+        '${eta == null ? '' : ' · estimated transfer remaining $eta s'}';
+  }
+
   String? get connectionWarning {
-    if (snapshot?.connectionState == 'RECOVERY_REQUIRED') return snapshot?.observation?['blocked_reason']?.toString() ?? 'Bench changed. Review its identity and reconnect explicitly.';
-    if (snapshot?.observation?['recovery_warning'] != null) return snapshot!.observation!['recovery_warning'].toString();
-    if (_pollError)
+    if (snapshot?.connectionState == 'RECOVERY_REQUIRED') {
+      return snapshot?.observation?['blocked_reason']?.toString() ??
+          'Bench changed. Review its identity and reconnect explicitly.';
+    }
+    if (snapshot?.observation?['recovery_warning'] != null) {
+      return snapshot!.observation!['recovery_warning'].toString();
+    }
+    if (_pollError) {
       return 'Athena service is unavailable. Readings are stale; the bench may still be running.';
+    }
     if (snapshot?.connectionState == 'RECONNECTING') {
       final retry = snapshot?.observation?['retry_in_s'];
-      return 'Connection lost — bench may still be running. Reconnecting${retry == null ? '…' : ' in $retry s…'}';
+      final outage = snapshot?.observation?['outage_s'];
+      return 'Connection lost${outage == null ? '' : ' for $outage s'} — bench may still be running. Reconnecting${retry == null ? '…' : ' in $retry s…'}';
     }
     if (snapshot?.connectionState == 'CONNECTED' &&
         !snapshot!.isFresh &&
@@ -65,7 +82,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    if (_disposed || loading || _refreshing) return;
+    if (_disposed || (loading && !uploading) || _refreshing) return;
     _refreshing = true;
     try {
       snapshot = await _api.fetchSnapshot();

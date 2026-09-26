@@ -33,6 +33,28 @@ class UsbBench:
         self.time_synced_at: str | None = None
         self.verified_frame_count: int | None = None
         self.last_control: dict | None = None
+        self._progress_lock = threading.Lock()
+        self._upload_progress: dict | None = None
+        self._upload_started = None
+
+    def upload_progress(self) -> dict | None:
+        # Intentionally independent of the transport lock held by upload().
+        with self._progress_lock:
+            if self._upload_progress is None:
+                return None
+            progress = dict(self._upload_progress)
+            elapsed = progress.get("elapsed_s", time.monotonic() - self._upload_started)
+            progress["elapsed_s"] = round(elapsed, 2)
+            acknowledged = progress["acknowledged_frames"]
+            progress["estimated_transfer_remaining_s"] = (
+                round(elapsed / acknowledged * (progress["total_frames"] - acknowledged), 1)
+                if progress["phase"] == "SENDING" and acknowledged >= 10 and elapsed > 0 else None
+            )
+            return progress
+
+    def _progress(self, **fields) -> None:
+        with self._progress_lock:
+            self._upload_progress.update(fields)
 
     def _validate_info(self) -> None:
         info = self.info or {}
@@ -176,6 +198,19 @@ class UsbBench:
             return self.snapshot()
 
     def upload(self, profile_id: str, canonical: dict, expected_sum: int) -> dict:
+        with self._progress_lock:
+            self._upload_started = time.monotonic()
+            self._upload_progress = {"kind": "upload", "phase": "PREPARING", "acknowledged_frames": 0,
+                                     "total_frames": len(canonical["frames"]), "checksum_confirmed": False}
+        try:
+            result = self._upload(profile_id, canonical, expected_sum)
+            self._progress(phase="COMPLETED", elapsed_s=time.monotonic() - self._upload_started)
+            return result
+        except Exception as error:
+            self._progress(phase="FAILED", error=str(error), elapsed_s=time.monotonic() - self._upload_started)
+            raise
+
+    def _upload(self, profile_id: str, canonical: dict, expected_sum: int) -> dict:
         with self._lock:
             self.refresh()
             channel_count = int(self.info["ch"])
@@ -196,12 +231,16 @@ class UsbBench:
             self.profile_id = None
             self.trace.clear()
             self.command(f"LOAD {rate} {len(frames)}")
+            self._progress(phase="SENDING")
             for index, frame in enumerate(frames):
                 self.command(f"F {index} {' '.join(map(str, frame))}")
+                self._progress(acknowledged_frames=index + 1)
+            self._progress(phase="VERIFYING")
             reply = self.command("COMMIT")
             if reply != f"OK SUM={expected_sum}":
                 raise BenchError(f"Bench checksum mismatch: {reply}")
             self.profile_id = profile_id
+            self._progress(checksum_confirmed=True)
             self.verified_frame_count = len(frames)
             return self.refresh()
 

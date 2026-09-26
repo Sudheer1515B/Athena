@@ -37,6 +37,45 @@ class AdvancingBench:
 
 
 class MonitorTests(unittest.TestCase):
+    def test_ten_minutes_of_failed_retries_can_recover_a_continuing_run(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "history.sqlite3")
+            original = AdvancingBench()
+            recorder = HistoryRecorder(database)
+            recorder.observe(original.snapshot(), action="start", target_cycles=1)
+            state = SimpleNamespace(database=database, bench=original, history=recorder,
+                                    desired_tcp=("127.0.0.1", 3333, "SIM"), reconnect_after=0)
+            now = [0]
+            attempts = []
+            def factory(**kwargs):
+                replacement = AdvancingBench()
+                def connect(host, port):
+                    attempts.append(now[0])
+                    if now[0] < 600:
+                        raise OSError("Network unreachable")
+                    replacement.reads = 1  # Bench is still running on recovery.
+                replacement.connect = connect
+                return replacement
+            with patch("backend.monitor.time", SimpleNamespace(monotonic=lambda: now[0])):
+                monitor = BenchMonitor(state, factory)
+                monitor.pin_identity()
+                monitor.capture()
+                original.disconnect()
+                for second in range(600):
+                    now[0] = second
+                    monitor.tick()
+                self.assertGreater(len(attempts), 40)
+                self.assertEqual(recorder.sessions()[0]["status"], "UNCONFIRMED")
+                self.assertFalse(monitor.snapshot()["observation"]["fresh"])
+                now[0] = 611
+                monitor.tick()
+                self.assertTrue(state.bench.connected)
+                self.assertEqual(recorder.sessions()[0]["status"], "RUNNING")
+                self.assertTrue(monitor.snapshot()["observation"]["fresh"])
+                self.assertTrue(recorder.sessions()[0]["has_link_gap"])
+            database.close()
+
     def test_reconnect_rejects_changed_capabilities_without_mutating_bench(self):
         with tempfile.TemporaryDirectory() as directory:
             database = open_database(Path(directory) / "history.sqlite3")

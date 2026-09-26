@@ -154,6 +154,19 @@ class BlockingUploadApi extends BenchApi {
   int uploadCalls = 0;
 
   @override
+  Future<BenchSnapshot> fetchSnapshot() async => BenchSnapshot.fromJson({
+    'connection': {'state': 'CONNECTED'},
+    'operation': {
+      'kind': 'upload',
+      'phase': 'SENDING',
+      'acknowledged_frames': 20,
+      'total_frames': 200,
+      'elapsed_s': 1.2,
+      'estimated_transfer_remaining_s': 10.8,
+    },
+  });
+
+  @override
   Future<BenchSnapshot> uploadProfile(String profileId) {
     uploadCalls++;
     return pending.future;
@@ -431,6 +444,25 @@ void main() {
     expect(state.error, contains('Checksum confirmation failed'));
     state.dispose();
   });
+
+  test(
+    'upload keeps polling measured progress while request is pending',
+    () async {
+      final api = BlockingUploadApi();
+      final state = AppState(api: api);
+      final pending = state.uploadProfile('profile-one');
+      await state.refresh();
+      expect(state.uploading, isTrue);
+      expect(state.uploadDetail, contains('20/200 frames acknowledged'));
+      expect(
+        state.uploadDetail,
+        contains('estimated transfer remaining 10.8 s'),
+      );
+      api.pending.complete(state.snapshot!);
+      await pending;
+      state.dispose();
+    },
+  );
 
   testWidgets('stale observations warn and cannot enable Start', (
     tester,

@@ -56,6 +56,8 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(session["status"], "COMPLETED")
             self.assertEqual(session["delta"]["cycles"], 1)
             self.assertTrue(session["has_link_gap"])
+            self.assertEqual(session["identity_confidence"], "uncertain")
+            self.assertTrue(any("exact stop time" in reason for reason in session["uncertainty_reasons"]))
             self.assertTrue(any(e["kind"] == "start_requested" for e in recorder.events()))
             database.close()
 

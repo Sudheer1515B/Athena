@@ -384,6 +384,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Persist Start requests and bench counter baselines before transmitting START. Lost acknowledgements are reported as unconfirmed and never automatically retried; completion requires new lifetime-cycle evidence, not the previous run's cycle index. Rejected Starts and failed Stop/Pause/Resume outcomes are recorded explicitly. Interrupted uploads invalidate local verification; changed reported frame counts invalidate it too.
 - All 26 backend tests passed. Supplied-simulator integration verified completion without browser polling, a deliberately lost START acknowledgement reconciled to +1 cycle, and an interrupted frame upload that could not enable Start. Command counts show no automatic START retry. Evidence: `/private/tmp/athena-resilience-r1/results.json`. Lost STOP acknowledgement coverage remains pending in R9. No physical commands were sent.
 
+## Entry 025 — 26 September 2026 — paused resilience checkpoint
+
+- User redirected work to independent receiver feedback, stale/power-loss display and explicit recovery approval. Preserve current resilience work as a WIP checkpoint; it is not a claim of completed hardware validation.
+- Last established functional prototype checkpoint: `6f8b5b8` (before background-monitor resilience phases); earlier published prototype: `177aaf7`. Preserve these commits and create a rollback branch. Do not reset/delete the working tree or firmware to demonstrate rollback.
+- Current checks before interruption: 30 backend tests, 14 Flutter tests passed; shorter supplied-simulator fault integration passed (upload progress, browser absence, lost START/STOP replies, interrupted upload, gap recovery). Ten-minute simulator test and final release checks were running; results must be inspected before claiming success. R5–R8 code is saved, native Windows launcher execution unverified. No physical upload/start/clear/flash performed.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

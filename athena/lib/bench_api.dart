@@ -19,6 +19,7 @@ class BenchSnapshot {
     required this.simulatorResetAllowed,
     this.observation,
     this.lastKnown,
+    this.operation,
   });
 
   final String connectionState;
@@ -34,6 +35,7 @@ class BenchSnapshot {
   final bool simulatorResetAllowed;
   final Map<String, dynamic>? observation;
   final Map<String, dynamic>? lastKnown;
+  final Map<String, dynamic>? operation;
   bool get isFresh => observation?['fresh'] != false;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
@@ -79,6 +81,9 @@ class BenchSnapshot {
           : null,
       lastKnown: json['last_known'] is Map
           ? Map<String, dynamic>.from(json['last_known'] as Map)
+          : null,
+      operation: json['operation'] is Map
+          ? Map<String, dynamic>.from(json['operation'] as Map)
           : null,
     );
   }

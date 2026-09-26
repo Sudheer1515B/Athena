@@ -78,6 +78,8 @@ Acceptance: mocked port tests cover receiver discovery, wrong/ambiguous adapters
 
 ## R9 — Validation and hardware follow-up
 
+Latest scope: tolerate **at least ten minutes of Wi-Fi loss**, with indefinite bounded-backoff retries while the backend remains running. No simulator fault button is wanted. Preserve powered bench playback; reconnect reads state/counters without replaying a control command. If the bench finishes during the gap, reconcile aggregate counter evidence and keep exact gap events/profile identity uncertain. A changed IP requires an explicit connection to the new address; firmware reboot and backend restart are separate conditions, not ordinary Wi-Fi recovery.
+
 - Add a controllable TCP fault proxy for the supplied simulator: close/block the connection, delay a reply, and drop one acknowledgement without stopping the simulator's bench clock.
 - Run isolated end-to-end cases: browser absent, link absent for at least six seconds mid-run, run finishing while disconnected, lost START reply, interrupted upload, reboot, and identity mismatch. Save commands, counter bounds and session outcomes as artifacts.
 - Add a read-only/preflight-first hardware checklist and a finite signal-only test procedure that requires explicit execution. Do not run the organizer's scorer on the real bench: it uploads, starts and can clear counters.
@@ -93,7 +95,10 @@ Acceptance: simulator evidence and meaningful backend/widget tests pass; release
 | R2 | Complete | 22 backend and 11 Flutter tests; capped retry delay, stale warning and disabled Start verified. |
 | R3 | Complete | 24 backend tests; changed capacity rejected and observed reboot saved with uncertain stop time. |
 | R4 | Implemented; STOP fault check pending | 26 backend tests; supplied simulator lost START reply and interrupted upload verified without automatic retry. |
-| R5–R8 | Planned | Execute after the preceding acceptance checks. |
+| R5 | Implemented | Completion no longer clears gap uncertainty; reasons included in details and CSV. |
+| R6 | Implemented | Transport-independent acknowledged-frame progress; slowed simulator upload and checksum gate checked. |
+| R7 | Implemented | Newest matching draft restored, sample defaults to 40–100 s, explicit short draft preserved; three widget tests. |
+| R8 | Implemented; Windows execution pending | Receiver-only launcher and adapter/no-data tests; Windows machine not operated here. |
 | R9 | Planned / hardware conditional | Supplied simulator available; physical servo and 16-channel equipment unverified. |
 
 Before beginning, save the already-tested upload indicator and receiver documentation as a Git checkpoint. Keep `IMPLEMENTATION_PLAN.md.zip` untouched and local history backups ignored. Update IMPLEMENTATION_LOG.md after each verified phase; do not describe unperformed tests as passing.

@@ -141,20 +141,23 @@ class _AthenaShellState extends State<AthenaShell> {
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
               child: Semantics(
                 liveRegion: true,
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
+                    const Text(
                       'Uploading profile…',
                       style: TextStyle(
                         color: Palette.brand,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    SizedBox(height: 4),
-                    Text('Please wait for the bench to confirm the upload.'),
-                    SizedBox(height: 8),
-                    LinearProgressIndicator(),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.state.uploadDetail ??
+                          'Please wait for the bench to confirm the upload.',
+                    ),
+                    const SizedBox(height: 8),
+                    const LinearProgressIndicator(),
                   ],
                 ),
               ),

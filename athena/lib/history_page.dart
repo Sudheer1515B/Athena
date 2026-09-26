@@ -404,6 +404,15 @@ class _SessionDetail extends StatelessWidget {
               'Counter reset or replacement suspected. Session deltas are unknown.',
               style: TextStyle(color: Palette.critical),
             ),
+          for (final reason
+              in detail['uncertainty_reasons'] as List? ?? const [])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                reason.toString(),
+                style: const TextStyle(color: Palette.critical),
+              ),
+            ),
           _fact('Start observed', _localTime(detail['started_at'])),
           _fact('End observed', _localTime(detail['ended_at'])),
           _fact('Stop cause', _known(detail['stop_cause'])),

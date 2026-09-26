@@ -35,6 +35,7 @@ class BenchMonitor:
         self.expected_capabilities = None
         self.blocked_reason = None
         self.recovery_warning = None
+        self.outage_started = None
 
     def reset_identity(self) -> None:
         self.expected_capabilities = None
@@ -42,6 +43,7 @@ class BenchMonitor:
         self.recovery_warning = None
         self.retry_attempts = 0
         self.state.reconnect_after = 0
+        self.outage_started = None
 
     def pin_identity(self) -> None:
         info = self.state.bench.snapshot().get("connection", {}).get("bench") or {}
@@ -70,6 +72,8 @@ class BenchMonitor:
             return False
 
     def schedule_retry(self) -> None:
+        if self.outage_started is None:
+            self.outage_started = time.monotonic()
         delay = min(10, 2 ** min(self.retry_attempts, 4) * random.uniform(.9, 1.1))
         self.retry_attempts += 1
         self.state.reconnect_after = time.monotonic() + delay
@@ -112,6 +116,7 @@ class BenchMonitor:
                 self.last_known = deepcopy(live)
                 self.last_error = None
                 self.retry_attempts = 0
+                self.outage_started = None
         return live
 
     def snapshot(self) -> dict:
@@ -129,8 +134,11 @@ class BenchMonitor:
                 "retry_in_s": round(max(0, self.state.reconnect_after - time.monotonic()), 1) if self.state.desired_tcp is not None else None,
                 "blocked_reason": self.blocked_reason,
                 "recovery_warning": self.recovery_warning,
+                "outage_s": None if self.outage_started is None else round(time.monotonic() - self.outage_started, 1),
             }
             live["last_known"] = deepcopy(self.last_known) if not live["observation"]["fresh"] else None
+        progress_reader = getattr(self.state.bench, "upload_progress", None)
+        live["operation"] = progress_reader() if progress_reader else None
         return live
 
     def tick(self) -> None:

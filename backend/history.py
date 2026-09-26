@@ -16,7 +16,7 @@ STOP_CAUSES = {
     "SUPERSEDED": "Controller started another session",
     "REBOOT_OBSERVED": "Bench reboot observed; exact stop time unknown",
     "START_REJECTED": "Start rejected by bench; no replay started by this request",
-    "COMMAND_UNCONFIRMED": "Start outcome could not be established from bench observations",
+    "COMMAND_UNCONFIRMED": "Command outcome unconfirmed; stopped state later observed",
 }
 
 
@@ -240,6 +240,15 @@ class HistoryRecorder:
 
     def _end_session(self, session_id: str, status: str, stamp: str,
                      confidence: str) -> None:
+        # Counter reconciliation does not remove uncertainty about gap events
+        # or profile identity. Completion and coverage are separate facts.
+        gap = self.database.execute(
+            "SELECT 1 FROM events WHERE session_id=? AND kind IN "
+            "('link_lost','command_unconfirmed','identity_mismatch','bench_reboot_observed') LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if gap:
+            confidence = "uncertain"
         self.database.execute(
             "UPDATE sessions SET status=?,ended_at=?,identity_confidence=? WHERE id=?",
             (status, stamp, confidence, session_id),
@@ -284,6 +293,7 @@ class HistoryRecorder:
                     "SELECT 1 FROM events WHERE session_id=? AND kind='link_lost' LIMIT 1",
                     (row["id"],),
                 ).fetchone())
+                item["uncertainty_reasons"] = self._uncertainty(row["id"], samples)
                 result.append(item)
             return result
 
@@ -328,7 +338,25 @@ class HistoryRecorder:
             )
             item["counter_epoch_changed"] = len({sample["epoch_id"] for sample in samples}) > 1
             item["stop_cause"] = STOP_CAUSES.get(item["status"])
+            item["uncertainty_reasons"] = self._uncertainty(session_id, samples)
             return item
+
+    def _uncertainty(self, session_id, samples):
+        kinds = {row[0] for row in self.database.execute(
+            "SELECT kind FROM events WHERE session_id=?", (session_id,))}
+        reasons = []
+        if "link_lost" in kinds:
+            reasons.append("Contact was lost. Intermediate events and exact stop time during the gap are unknown; recovered counters are aggregate observations.")
+            reasons.append("The profile uploaded before the gap cannot be independently verified after reconnect with WDR v1.")
+        if "command_unconfirmed" in kinds:
+            reasons.append("A command reply was lost; its outcome was not confirmed at the time of the request.")
+        if "bench_reboot_observed" in kinds:
+            reasons.append("A bench reboot was observed; exact reboot/stop time is unknown.")
+        if "identity_mismatch" in kinds:
+            reasons.append("Recovered bench capabilities differed; automatic recovery was blocked.")
+        if len({sample["epoch_id"] for sample in samples}) > 1:
+            reasons.append("Counters changed epoch; session deltas are unknown.")
+        return reasons
 
     def _session_snapshots(self, session_id: str) -> list[sqlite3.Row]:
         return self.database.execute(

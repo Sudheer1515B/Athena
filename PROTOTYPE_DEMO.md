@@ -45,6 +45,20 @@ Suggested line: “Athena converts an unmodified recorded flight into a PWM comm
 
 ## Optional real-output proof
 
+### Ten-minute Wi-Fi recovery demo
+
+Keep the bench powered from its separate USB supply/computer and the receiver powered on Windows. Keep all four signal wires and common ground connected; leave servos disconnected for this signal-only demonstration.
+
+1. Start the receiver with **Start Windows Receiver.cmd** (setup in `pwm_receiver/WINDOWS_MONITOR.md`). On the Mac, start the updated backend and open Athena. Connect to the reachable bench Wi-Fi address, last known `10.178.45.105:3333`.
+2. Compile the supplied 40–100 s flight segment at 50 fps: 3,000 frames, 60 seconds per cycle. Upload once and wait for checksum confirmation. Set **cycle target 12** and Start once: about 12 minutes total. This replaces the prior profile and increments bench counters.
+3. Around 15 seconds into playback, turn **the Mac's Wi-Fi off for ten minutes**. Leave the backend and both ESP32s powered. Do not press Disconnect in Athena: that deliberately cancels recovery. Do not unplug PWM/ground wires or reset the bench.
+4. Athena should warn that contact is lost, report retry timing/observation age, and stop presenting samples as live. The separate Windows terminal should continue printing PWM widths and pulse counts: playback runs on the bench, without needing a connected dashboard.
+5. Turn Mac Wi-Fi back on and rejoin the same reachable network. Athena retries automatically, reads the current frame/state and lifetime counters, and does **not** issue another Start. Allow roughly one retry wait plus connection time; a changed bench IP requires manual reconnection to its new address.
+6. Let the finite run finish. Refresh History and expand the session: it must retain the link gap/uncertainty warning and recovered aggregate counters. Exact intermediate cycle completion times cannot be recovered. If a shorter run finished during the outage, it should reconcile to completion from bench counter evidence after reconnect.
+
+The backend must remain running for this automatic recovery. Stop cannot reach a disconnected bench; bench power loss/reboot is a different failure. Profile identity becomes unverified after reconnect, so a subsequent new Start requires another deliberate verified upload. A ten-minute supplied-simulator transport test is being recorded; a physical ten-minute outage has not yet been verified.
+
+
 The two ESP32 boards can remain wired and powered. They are **not used** by the simulator demo. If asked whether physical outputs exist, run this only after closing any serial monitor and ensuring Athena is **not** connected to the physical USB bench:
 
 ```sh
