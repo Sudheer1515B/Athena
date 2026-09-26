@@ -1,6 +1,6 @@
 # Athena working demo — official simulator first
 
-The main demo uses the organizer's **supplied simulator** and Flutter dashboard. It proves the flight-log → profile → WDR upload → replay → live pulse graph → durable session/counter history flow without changing either physical ESP32 or the real bench's saved 100-frame profile. The two-board PWM check is optional independent hardware evidence.
+The main demo uses the organizer's **supplied simulator** and Flutter dashboard. It proves the flight-log → profile → WDR upload → replay → live pulse graph → durable session/counter history flow without requiring physical hardware during judging. A separate real Wi-Fi run has now verified a short 200-frame Athena profile and all four physical PWM outputs; its evidence is saved, so it need not be repeated live.
 
 ## Start two local services
 
@@ -31,7 +31,7 @@ Open `http://127.0.0.1:8080` in a browser. Run only one backend and one simulato
 
 For a fast smoke test, the earlier 40–44 s window remains valid: 200 frames, 4 seconds, SUM16 16982. The one-minute run is better for judging because the live graph and hour meters visibly change.
 
-Suggested line: “Athena converts an unmodified recorded flight into an exact PWM command profile, uploads it before motion, and lets the bench clock replay it. It shows sampled live commands and saves the bench's own cycle and per-channel active-time counters. Our second ESP separately verified that the physical reference bench generates four 50 Hz PWM outputs.”
+Suggested line: “Athena converts an unmodified recorded flight into a PWM command profile, uploads it before motion, and lets the bench clock replay it. It shows sampled live commands and saves the bench's own cycle and per-channel active-time counters. We also replayed a short flight segment over Wi-Fi on the real bench, while a second ESP independently measured all four PWM outputs.”
 
 ## Optional real-output proof
 
@@ -41,10 +41,10 @@ The two ESP32 boards can remain wired and powered. They are **not used** by the 
 .venv/bin/python -u pwm_receiver/check_pwm.py
 ```
 
-The receiver previously measured commanded widths `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. The script sends only reversible `SET`/`STOP` commands; at that earlier check it confirmed the 100-frame profile and counters were unchanged. A later capture replayed that saved profile three times without replacing it, so the bench's current lifetime counters are higher (`cycles=24 run_s=30 active_s=29,29,29,12`). See `pwm_receiver/README.md` for port identities and wiring.
+The receiver first measured manual commands `1100,1300,1700,1900` as `1100,1297,1694,1891` µs, each at a 20,000 µs period. Later, during Athena's real Wi-Fi replay of a 200-frame flight-log profile, it recorded 21 valid four-channel readings with 19,999–20,000 µs periods; the active widths tracked the uploaded profile. [Saved evidence](captures/real_wifi_flight_20260926.json) is preferable to repeating a physical run live. Current real-bench counters are `cycles=25 run_s=34 active_s=33,33,33,16`. See `pwm_receiver/README.md` for port identities and wiring.
 
 ## What is proven and what remains
 
 - **Proven in Athena against the supplied simulator:** log import, deterministic 3,000-frame compilation, checksum-verified upload, full 60-second finite replay, a connected browser view of the sampled pulse graph, authoritative counters, a completed durable session, history CSV export, and TIME acknowledgement. The end-to-end run added one cycle, 60 running seconds, and distinct per-channel active time. A 4-second smoke test also passed.
-- **Proven electrically on the reference bench:** four distinct physical PWM outputs arrive on the independent receiver at the intended channels, then return to 1500 µs idle without profile or counter loss.
-- **Not yet proven:** replay of the newly compiled profile on the real bench and physical servo movement/life. The user reports that Athena received reference-bench INFO and a TIME acknowledgement over Wi-Fi at `10.178.45.105:3333`; this was connection-only, with no upload, START or CLEAR. Uploading the compiled profile to the real bench would replace its saved 100-frame profile; do not do that during this preservation demo. Counter reset is available only on the simulator; the backend refuses it on physical benches to preserve their lifetime totals.
+- **Proven on the four-channel reference bench:** Athena uploaded a 200-frame profile from the supplied flight log over Wi-Fi, completed one finite four-second cycle, saved the bench-reported counter deltas, and the independent receiver saw four physical PWM signals matching the profile's value ranges. The board is now stopped at idle with that 200-frame profile committed. The original 100-frame width sequence was archived before replacement.
+- **Not yet proven:** physical servo movement/life and operation on 16-channel hardware. Counter reset remains simulator-only; the backend refuses it on the physical bench.

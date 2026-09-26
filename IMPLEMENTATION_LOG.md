@@ -6,7 +6,7 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 
 ## Current status
 
-**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB, local-simulator and generic WDR TCP adapters can upload profiles and run finite cycles. A full 60-second Athena API replay completed against the supplied simulator, including sampled pulse traces and durable session/counter records. The reference bench's pre-existing 100-frame profile was subsequently replayed over Wi-Fi and reconstructed from STATUS; replay of Athena's newly compiled profile on that physical bench remains untested.
+**Application implementation: IN PROGRESS; M1–M2 COMPLETE.** Athena imports and compiles the supplied CSV, persists originals and immutable profiles, previews traces and exports compiled CSV. Its USB, local-simulator and generic WDR TCP adapters can upload profiles and run finite cycles. A full 60-second Athena API replay completed against the supplied simulator. A later Athena Wi-Fi run uploaded the 200-frame flight-log profile to the physical reference bench, completed one finite cycle, persisted its history, and was independently observed by the wired receiver ESP32. No servos were attached.
 
 **Artifact review and official-tool baseline: COMPLETE.** The official simulator is available. No replacement simulator is needed. The original tool conformance runs passed, and Athena now connects to its real TCP service.
 
@@ -17,12 +17,12 @@ This is the execution record for [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md
 | M0 | Artifact inspection, supplied-tool baselines, detailed plan/log | Complete | Entry 001 and planning_evidence |
 | M1 | Backend skeleton/schema, Flutter shell, interfaces | Complete | Backend tests, Flutter analyze/tests/build and 1440×900 visual review pass |
 | M2 | CSV importer and deterministic compiler | Complete | Golden case and API persistence/export pass; Flutter analyze/tests/build pass |
-| M3 | WDR adapter, uploads and operations | In progress | USB and simulator TCP replay pass; user reports reference-bench Wi-Fi INFO/TIME connection check; physical Wi-Fi upload/replay not tested |
+| M3 | WDR adapter, uploads and operations | In progress | USB read path, simulator replay, and physical Wi-Fi 200-frame upload/finite replay pass; remaining recovery cases and longer physical run untested |
 | M4 | First browser-to-simulator workflow | In progress | Full 40–100 s workflow passed through Athena API against supplied TCP simulator; live browser walkthrough remains |
 | M5 | Controls, recovery, accounting | In progress | Start/pause/resume/stop, manual SET, live counters, durable sessions and uncertain disconnect state exist; recovery edge cases remain |
 | M6 | History/filtering/charts/CSV | In progress | Sessions/events, UTC and channel filters, per-channel hours chart, expanded persisted details and CSV pass tests; browser visual review of populated History remains |
 | M7 | PDF, finish estimate, production build/README/demo | In progress | Web build and 60-second simulator demo runbook exist; report/estimate and final polish remain |
-| M8 | Venue hardware verification | In progress | Four real PWM outputs measured by independent receiver; real Wi-Fi finite replay of existing profile captured all 100 frame widths; newly compiled flight-profile replay remains intentionally unperformed |
+| M8 | Venue hardware verification | In progress | Real Wi-Fi upload of compiled 200-frame flight profile and one finite cycle passed; receiver independently saw four PWM outputs; 16-channel/servo-load tests remain |
 
 ## Entry 001 — 25 September 2026 — Inspection and planning only
 
@@ -307,6 +307,14 @@ The simulator proves protocol and app integration, not electrical output or actu
 - First tested on the **supplied simulator** with a known 100-frame, 50 Hz profile. One finite run captured all indices and the saved CSV matched all 400 original pulse values exactly. A frame-index/time fit estimated 49.98 Hz on the simulator.
 - The user confirmed only the four signal wires and common ground were attached to the independent receiver ESP32, with no servos, and that Athena's backend/dashboard were off. A read-only Wi-Fi preflight of `10.178.45.105:3333` reported `proto=1`, `team=WDR_REFERENCE`, four channels, 8,000-frame capacity, STOPPED, 100 committed frames, and lifetime counters `cycles=21 run_s=24 active_s=23,23,23,6`.
 - Three finite replays of the **existing** real-bench profile observed all 100 frame indices with no conflicting values. All 100 frames report `OUT0–3 = 1100,1300,1700,1900` µs. [Capture artifacts](captures/reference_100frame_20260926/) include raw STATUS lines (271 observations), a manifest, frame CSV, and an Athena-compatible approximate TimeUS source. A linear fit estimated 50.06 Hz, so the import file uses 50 Hz. Athena's compiler reproduced the same 100 frames and computed SUM16 **10176** from the captured widths; the original uploaded checksum/source/labels remain unknown. The bench stopped normally with the original 100-frame profile still committed. Its authoritative lifetime counters advanced to `cycles=24 run_s=30 active_s=29,29,29,12`. This captures bench-reported commanded widths, not independent physical PWM measurements.
+
+## Entry 013 — 26 September 2026 — Physical Wi-Fi flight-profile replay with receiver evidence
+
+- The user reconnected both USB boards and confirmed only four signal wires plus common ground between the WDR and receiver ESP32s, with no servos. Device enumeration identified the WDR CP2102 as `/dev/cu.usbserial-0001` (serial `0001`) and the independent CH340 receiver as `/dev/cu.usbserial-10`. Opened **only the receiver** serial port; all four idle inputs measured 1499–1500 µs at a 19,999–20,000 µs period. Neither board was flashed and the WDR USB port was not opened.
+- A read-only Wi-Fi preflight at `10.178.45.105:3333` found WDR protocol 1, `team=WDR_REFERENCE`, four channels, 8,000-frame capacity, STOPPED, the archived 100-frame profile, and `cycles=24 run_s=30 active_s=29,29,29,12`.
+- Ran Athena's actual API with its persistent local SQLite data: imported the unmodified supplied `RCOU.csv`, compiled C1–C4 over 40–44 seconds at 50 Hz to **200 frames / SUM16 16982**, uploaded over Wi-Fi, and confirmed STOPPED with `frames=200` before sending a finite `START 1`. This replaced the archived 100-frame profile by the user's accepted decision. No `CLEAR` or firmware update was sent.
+- The physical bench automatically completed after four seconds. Athena saved a COMPLETED session with **+1 cycle, +4 run_s, +4 active_s on each output**. Authoritative lifetime counters advanced to `cycles=25 run_s=34 active_s=33,33,33,16`. Seventeen Athena STATUS samples showed changing commanded pulse values. The separate receiver logged 21 valid four-channel samples during the run; 16 active samples had periods 19,999–20,000 µs and each channel's measured widths were within 2, 3, 7, and 7 µs respectively of a value in the uploaded profile. This nearest-value check establishes compatible physical output ranges, not frame-perfect time alignment.
+- [Saved run evidence](captures/real_wifi_flight_20260926.json) includes bench INFO, before/after counters, compiled profile summary/hash, sampled status, persisted session/detail and raw/parsed receiver readings. A separate read-only Wi-Fi check after disconnect confirmed STOPPED at idle with the 200-frame profile still committed and counters unchanged from the completed run. The user's in-progress edits to `athena/lib/main.dart` and `athena/lib/theme.dart` were left untouched.
 
 ## Future entry template
 
