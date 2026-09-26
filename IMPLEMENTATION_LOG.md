@@ -367,6 +367,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Added a lifespan-managed one-second backend monitor. Snapshot requests return cached bench observations without network polling; bench mutations and monitoring share a serialized I/O lock, with busy mutations rejected instead of queued. A separate synchronized SQLite HistoryRecorder connection avoids background recording inside profile-import transactions. Startup remains disconnected; shutdown ends the worker without commanding a bench stop.
 - All 21 backend tests passed, including recording completion without browser requests and nonblocking snapshots while another thread holds bench I/O. `scripts/verify_resilience.py` ran the supplied official SimDevice/socket bridge on an isolated loopback port and temporary database: the 200-frame supplied-log profile completed with no snapshot requests, persisted COMPLETED with +1 cycle/+4 run_s, and only one START was sent. Evidence: `/private/tmp/athena-resilience-r1/results.json`. No real bench was connected or changed; the running demo backend has not yet been replaced.
 
+## Entry 022 — 26 September 2026 — R2 stale state and retry feedback
+
+- Added last successful bench receive time, observation age, retry count/delay and separate last-known data to cached snapshots. Retry delays increase approximately 1/2/4/8 seconds with jitter and cap at ten seconds. Explicit disconnect removes the retry target.
+- Flutter now labels stale/disconnected observations, warns that the bench may still be running, labels old traces, and disables Start/Pause/Resume/manual SET/upload when readings are stale. Browser snapshot requests time out after five seconds; browser-to-backend failure is distinguished from a bench reconnect. A connected Stop remains available as an explicit attempt.
+- All 22 backend tests and 11 Flutter tests passed, including capped retry scheduling and stale observations not enabling Start. No physical connection, upload or replay was used for these checks. The previous demo backend remains running with the old release until final activation.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

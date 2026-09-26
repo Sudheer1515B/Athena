@@ -37,6 +37,21 @@ class AdvancingBench:
 
 
 class MonitorTests(unittest.TestCase):
+    def test_retry_delay_is_capped_and_explicit_disconnect_disables_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "history.sqlite3")
+            bench = AdvancingBench()
+            bench.connected = False
+            state = SimpleNamespace(database=database, bench=bench,
+                                    history=HistoryRecorder(database), desired_tcp=None, reconnect_after=0)
+            monitor = BenchMonitor(state, None)
+            for _ in range(20):
+                monitor.schedule_retry()
+                self.assertLessEqual(state.reconnect_after - time.monotonic(), 10)
+            monitor.tick()  # No target: must never attempt a connection.
+            self.assertFalse(state.bench.connected)
+            database.close()
+
     def test_background_records_completion_without_browser_requests(self):
         with tempfile.TemporaryDirectory() as directory:
             database = open_database(Path(directory) / "history.sqlite3")

@@ -6,6 +6,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import threading
 import time
+import random
 
 from .bench_usb import BenchError
 
@@ -26,6 +27,12 @@ class BenchMonitor:
         self._last_seen_mono = None
         self.last_error = None
         self.last_known = None
+        self.retry_attempts = 0
+
+    def schedule_retry(self) -> None:
+        delay = min(10, 2 ** min(self.retry_attempts, 4) * random.uniform(.9, 1.1))
+        self.retry_attempts += 1
+        self.state.reconnect_after = time.monotonic() + delay
 
     def start(self) -> None:
         self._thread.start()
@@ -64,6 +71,7 @@ class BenchMonitor:
                     self._last_seen_mono = time.monotonic()
                 self.last_known = deepcopy(live)
                 self.last_error = None
+                self.retry_attempts = 0
         return live
 
     def snapshot(self) -> dict:
@@ -77,6 +85,8 @@ class BenchMonitor:
                 "age_s": None if age is None else round(age, 3),
                 "fresh": live.get("connection", {}).get("state") == "CONNECTED" and age is not None and age <= 3,
                 "last_error": self.last_error,
+                "retry_attempts": self.retry_attempts,
+                "retry_in_s": round(max(0, self.state.reconnect_after - time.monotonic()), 1) if self.state.desired_tcp is not None else None,
             }
             live["last_known"] = deepcopy(self.last_known) if not live["observation"]["fresh"] else None
         return live
@@ -92,7 +102,7 @@ class BenchMonitor:
                 except (BenchError, OSError, ValueError) as error:
                     self.last_error = str(error)
                     bench.disconnect()
-                    self.state.reconnect_after = time.monotonic() + 3
+                    self.schedule_retry()
             desired = self.state.desired_tcp
             if desired is not None and not self.state.bench.connected and time.monotonic() >= self.state.reconnect_after:
                 host, port, expected_team = desired
@@ -107,7 +117,7 @@ class BenchMonitor:
                 except (BenchError, OSError, ValueError) as error:
                     replacement.disconnect()
                     self.last_error = str(error)
-                    self.state.reconnect_after = time.monotonic() + 3
+                    self.schedule_retry()
             self.capture()
         finally:
             self.io_lock.release()

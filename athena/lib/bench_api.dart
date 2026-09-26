@@ -17,6 +17,8 @@ class BenchSnapshot {
     required this.trace,
     required this.timeSync,
     required this.simulatorResetAllowed,
+    this.observation,
+    this.lastKnown,
   });
 
   final String connectionState;
@@ -30,6 +32,9 @@ class BenchSnapshot {
   final List<TraceSample> trace;
   final Map<String, dynamic>? timeSync;
   final bool simulatorResetAllowed;
+  final Map<String, dynamic>? observation;
+  final Map<String, dynamic>? lastKnown;
+  bool get isFresh => observation?['fresh'] != false;
 
   factory BenchSnapshot.fromJson(Map<String, dynamic> json) {
     final connection = json['connection'];
@@ -69,6 +74,12 @@ class BenchSnapshot {
           ? Map<String, dynamic>.from(json['time_sync'] as Map)
           : null,
       simulatorResetAllowed: json['simulator_reset_allowed'] == true,
+      observation: json['observation'] is Map
+          ? Map<String, dynamic>.from(json['observation'] as Map)
+          : null,
+      lastKnown: json['last_known'] is Map
+          ? Map<String, dynamic>.from(json['last_known'] as Map)
+          : null,
     );
   }
 }
@@ -114,7 +125,9 @@ class BenchApi {
   Uri endpoint(String path) => baseUri.resolve('/api/v1/$path');
 
   Future<BenchSnapshot> fetchSnapshot() async {
-    final response = await _client.get(endpoint('snapshot'));
+    final response = await _client
+        .get(endpoint('snapshot'))
+        .timeout(const Duration(seconds: 5));
     return BenchSnapshot.fromJson(_decodeObject(response));
   }
 

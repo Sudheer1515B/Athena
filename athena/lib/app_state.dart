@@ -24,6 +24,24 @@ class AppState extends ChangeNotifier {
   bool _disposed = false;
   bool _refreshing = false;
   bool _pollError = false;
+  bool get benchLive =>
+      !_pollError &&
+      snapshot?.connectionState == 'CONNECTED' &&
+      snapshot!.isFresh;
+  String? get connectionWarning {
+    if (_pollError)
+      return 'Athena service is unavailable. Readings are stale; the bench may still be running.';
+    if (snapshot?.connectionState == 'RECONNECTING') {
+      final retry = snapshot?.observation?['retry_in_s'];
+      return 'Connection lost — bench may still be running. Reconnecting${retry == null ? '…' : ' in $retry s…'}';
+    }
+    if (snapshot?.connectionState == 'CONNECTED' &&
+        !snapshot!.isFresh &&
+        !uploading) {
+      return 'Bench readings are stale. Wait for a fresh observation before starting another operation.';
+    }
+    return null;
+  }
 
   Future<void> connect() async {
     if (_disposed) return;

@@ -120,6 +120,22 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.connectionWarning != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _banner(widget.state.connectionWarning!),
+                  if (widget.state.snapshot?.observation?['last_seen_at'] !=
+                      null)
+                    Text(
+                      'Last bench observation: ${widget.state.snapshot!.observation!['last_seen_at']} · ${widget.state.snapshot!.observation!['age_s']} s ago',
+                      style: const TextStyle(color: Palette.muted),
+                    ),
+                ],
+              ),
+            ),
           if (widget.state.uploading)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -162,9 +178,7 @@ class _AthenaShellState extends State<AthenaShell> {
                         ProfilePage(
                           api: widget.state.api,
                           benchBusy: widget.state.loading,
-                          benchConnected:
-                              widget.state.snapshot?.connectionState ==
-                              'CONNECTED',
+                          benchConnected: widget.state.benchLive,
                           transport: widget
                               .state
                               .snapshot
@@ -208,7 +222,7 @@ class _AthenaShellState extends State<AthenaShell> {
   );
 
   Widget _topBar() {
-    final connected = widget.state.snapshot?.connectionState == 'CONNECTED';
+    final connected = widget.state.benchLive;
     final reconnecting =
         widget.state.snapshot?.connectionState == 'RECONNECTING';
     final status = widget.state.error != null
@@ -384,7 +398,7 @@ class _AthenaShellState extends State<AthenaShell> {
     final snapshot = widget.state.snapshot;
     final status = snapshot?.benchState;
     final counters = snapshot?.counters;
-    final connected = snapshot?.connectionState == 'CONNECTED';
+    final connected = widget.state.benchLive;
     final reconnecting = snapshot?.connectionState == 'RECONNECTING';
     final runSeconds = int.tryParse(counters?['run_s']?.toString() ?? '');
     final frame = int.tryParse(status?['frame']?.toString() ?? '');
@@ -413,7 +427,9 @@ class _AthenaShellState extends State<AthenaShell> {
       _tile(
         'Cycles completed',
         counters?['cycles']?.toString() ?? '—',
-        'Lifetime bench total',
+        connected
+            ? 'Lifetime bench total'
+            : 'Last known lifetime total · stale',
       ),
       _tile(
         'Current cycle',
@@ -425,7 +441,9 @@ class _AthenaShellState extends State<AthenaShell> {
       _tile(
         'Total bench hours',
         runSeconds == null ? '—' : (runSeconds / 3600).toStringAsFixed(3),
-        'RUNNING time from bench',
+        connected
+            ? 'RUNNING time from bench'
+            : 'Last known RUNNING time · stale',
       ),
     ];
     if (narrow) {
@@ -542,6 +560,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 FilledButton(
                   onPressed:
                       widget.state.loading ||
+                          !widget.state.benchLive ||
                           widget.state.snapshot?.profile == null ||
                           widget.state.snapshot?.benchState?['state'] !=
                               'STOPPED' ||
@@ -561,6 +580,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 OutlinedButton(
                   onPressed:
                       widget.state.loading ||
+                          !widget.state.benchLive ||
                           widget.state.snapshot?.benchState?['state'] !=
                               'RUNNING'
                       ? null
@@ -570,6 +590,7 @@ class _AthenaShellState extends State<AthenaShell> {
                 OutlinedButton(
                   onPressed:
                       widget.state.loading ||
+                          !widget.state.benchLive ||
                           widget.state.snapshot?.benchState?['state'] !=
                               'PAUSED'
                       ? null
@@ -596,7 +617,9 @@ class _AthenaShellState extends State<AthenaShell> {
       ),
       const SizedBox(height: 18),
       BenchCard(
-        title: 'Live traces · this cycle',
+        title: widget.state.benchLive
+            ? 'Live traces · this cycle'
+            : 'Last observed traces · stale',
         child: LiveTrace(samples: widget.state.snapshot?.trace ?? const []),
       ),
     ],
@@ -802,6 +825,7 @@ class _AthenaShellState extends State<AthenaShell> {
             OutlinedButton(
               onPressed:
                   widget.state.loading ||
+                      !widget.state.benchLive ||
                       widget.state.snapshot?.benchState?['state'] !=
                           'STOPPED' ||
                       int.tryParse(manualChannel.text) == null ||

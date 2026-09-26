@@ -90,8 +90,9 @@ Acceptance: simulator evidence and meaningful backend/widget tests pass; release
 | Phase | Status | Evidence |
 | --- | --- | --- |
 | R1 | Complete | 21 backend tests; supplied-simulator one-cycle run persisted with no browser polling, +1 cycle/+4 run_s. |
-| R2 | In progress | Add stale/reconnect presentation and bounded retry scheduling next. |
-| R3–R8 | Planned | Execute after the preceding acceptance checks. |
+| R2 | Complete | 22 backend and 11 Flutter tests; capped retry delay, stale warning and disabled Start verified. |
+| R3 | In progress | Pin reconnect capabilities and detect observed reboot next. |
+| R4–R8 | Planned | Execute after the preceding acceptance checks. |
 | R9 | Planned / hardware conditional | Supplied simulator available; physical servo and 16-channel equipment unverified. |
 
 Before beginning, save the already-tested upload indicator and receiver documentation as a Git checkpoint. Keep `IMPLEMENTATION_PLAN.md.zip` untouched and local history backups ignored. Update IMPLEMENTATION_LOG.md after each verified phase; do not describe unperformed tests as passing.

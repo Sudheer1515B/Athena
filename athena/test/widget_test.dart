@@ -431,4 +431,36 @@ void main() {
     expect(state.error, contains('Checksum confirmation failed'));
     state.dispose();
   });
+
+  testWidgets('stale observations warn and cannot enable Start', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = AppState();
+    addTearDown(state.dispose);
+    state.snapshot = BenchSnapshot.fromJson({
+      'connection': {'state': 'CONNECTED'},
+      'bench_state': {'state': 'STOPPED'},
+      'profile': {'id': 'previous'},
+      'observation': {
+        'fresh': false,
+        'age_s': 10,
+        'last_seen_at': '2026-09-26T00:00:00Z',
+      },
+    });
+    await tester.pumpWidget(MyApp(state: state));
+    expect(find.textContaining('Bench readings are stale.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, '▶ Start 1 cycle'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(find.textContaining('Last bench observation:'), findsOneWidget);
+  });
 }
