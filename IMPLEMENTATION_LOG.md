@@ -379,6 +379,11 @@ The simulator proves protocol and app integration, not electrical output or actu
 - An observed uptime decrease records a reboot, invalidates upload verification and ends an affected open session as REBOOT_OBSERVED with uncertain exact stop time. The UI exposes the reboot/recovery warning. WDR v1 still cannot uniquely identify a physical board or prove an unchanged profile after takeover; a reboot whose uptime has already exceeded the prior observation may also be undetectable.
 - All 24 backend tests passed, including changed-capacity rejection and reboot-session uncertainty. These were controlled fake-transport checks; full supplied-simulator fault scenarios remain in R9. No real bench command or firmware change was performed.
 
+## Entry 024 — 26 September 2026 — R4 interrupted commands
+
+- Persist Start requests and bench counter baselines before transmitting START. Lost acknowledgements are reported as unconfirmed and never automatically retried; completion requires new lifetime-cycle evidence, not the previous run's cycle index. Rejected Starts and failed Stop/Pause/Resume outcomes are recorded explicitly. Interrupted uploads invalidate local verification; changed reported frame counts invalidate it too.
+- All 26 backend tests passed. Supplied-simulator integration verified completion without browser polling, a deliberately lost START acknowledgement reconciled to +1 cycle, and an interrupted frame upload that could not enable Start. Command counts show no automatic START retry. Evidence: `/private/tmp/athena-resilience-r1/results.json`. Lost STOP acknowledgement coverage remains pending in R9. No physical commands were sent.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

@@ -15,6 +15,8 @@ STOP_CAUSES = {
     "STOPPED_OBSERVED": "Stopped state observed; cause unknown",
     "SUPERSEDED": "Controller started another session",
     "REBOOT_OBSERVED": "Bench reboot observed; exact stop time unknown",
+    "START_REJECTED": "Start rejected by bench; no replay started by this request",
+    "COMMAND_UNCONFIRMED": "Start outcome could not be established from bench observations",
 }
 
 
@@ -126,7 +128,7 @@ class HistoryRecorder:
                 "SELECT * FROM sessions WHERE bench_id=? AND ended_at IS NULL "
                 "ORDER BY created_at DESC LIMIT 1", (bench_id,),
             ).fetchone()
-            if action == "start":
+            if action in {"start", "start_requested"}:
                 if active_session is not None:
                     self._end_session(active_session["id"], "SUPERSEDED", stamp, "uncertain")
                 session_id = str(uuid4())
@@ -135,7 +137,8 @@ class HistoryRecorder:
                     "INSERT INTO sessions(id,bench_id,profile_id,target_cycles,status,"
                     "identity_confidence,started_at,created_at) VALUES(?,?,?,?,?,?,?,?)",
                     (session_id, bench_id, profile.get("id"), target_cycles or 0,
-                     "RUNNING", "observed", stamp, stamp),
+                     "START_UNCONFIRMED" if action == "start_requested" else "RUNNING",
+                     "uncertain" if action == "start_requested" else "observed", stamp, stamp),
                 )
                 active_session = self.database.execute(
                     "SELECT * FROM sessions WHERE id=?", (session_id,),
@@ -177,6 +180,8 @@ class HistoryRecorder:
                     "state": status.get("state"), "cycles": cycles,
                     "run_s": run_s, "target_cycles": target_cycles,
                 }, "observed")
+            if action == "start_acknowledged" and active_session is not None:
+                self.database.execute("UPDATE sessions SET identity_confidence='observed' WHERE id=?", (session_id,))
             if active_session is not None:
                 try:
                     reported_cycle = int(status.get("cycle", "0"))
@@ -198,10 +203,14 @@ class HistoryRecorder:
                     self._end_session(session_id, "REBOOT_OBSERVED", stamp, "uncertain")
                 elif action == "stop":
                     self._end_session(session_id, "MANUAL_STOP", stamp, "observed")
-                elif state == "STOPPED" and action != "start":
+                elif state == "STOPPED" and action not in {"start", "start_requested"}:
+                    samples = self._session_snapshots(session_id)
+                    delta = self._delta(samples)
                     completed = (active_session["target_cycles"] > 0
-                                 and int(status.get("cycle", "0")) >= active_session["target_cycles"])
-                    self._end_session(session_id, "COMPLETED" if completed else "STOPPED_OBSERVED",
+                                 and int(status.get("cycle", "0")) >= active_session["target_cycles"]
+                                 and delta is not None and delta["cycles"] >= active_session["target_cycles"])
+                    ending = "COMPLETED" if completed else "COMMAND_UNCONFIRMED" if active_session["status"] in {"START_UNCONFIRMED", "UNCONFIRMED"} else "STOPPED_OBSERVED"
+                    self._end_session(session_id, ending,
                                       stamp, "observed" if completed else "inferred")
                     self._event(bench_id, session_id,
                                 "cycle_target_reached" if completed else "run_ended_observed",
@@ -221,6 +230,13 @@ class HistoryRecorder:
                 "SELECT id FROM sessions WHERE bench_id=? AND ended_at IS NULL ORDER BY created_at DESC LIMIT 1", (bench_id,),
             ).fetchone()
             self._event(bench_id, active["id"] if active else None, kind, now_utc(), details, "uncertain")
+
+    def reject_start(self, reason: str) -> None:
+        self.notice("start_rejected", {"reason": reason})
+        with self._lock, self.database:
+            active = self.database.execute("SELECT id FROM sessions WHERE bench_id=? AND ended_at IS NULL ORDER BY created_at DESC LIMIT 1", (self._connected_bench_id,)).fetchone()
+            if active:
+                self._end_session(active["id"], "START_REJECTED", now_utc(), "observed")
 
     def _end_session(self, session_id: str, status: str, stamp: str,
                      confidence: str) -> None:

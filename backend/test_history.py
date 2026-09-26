@@ -31,6 +31,34 @@ def bench_snapshot(*, state: str, cycle: int, cycles: int,
 
 
 class HistoryTests(unittest.TestCase):
+    def test_lost_start_reply_does_not_confirm_previous_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "db.sqlite3")
+            recorder = HistoryRecorder(database)
+            before = bench_snapshot(state="STOPPED", cycle=1, cycles=10, run_s=40)
+            recorder.observe(before, action="start_requested", target_cycles=1)
+            recorder.observe({"connection": {"state": "DISCONNECTED"}})
+            before["trace"] = [{"sampled_at": "2026-09-26T00:01:00Z"}]
+            recorder.observe(before)
+            session = recorder.sessions()[0]
+            self.assertEqual(session["status"], "COMMAND_UNCONFIRMED")
+            self.assertEqual(session["delta"]["cycles"], 0)
+            database.close()
+
+    def test_lost_start_reply_can_reconcile_finished_run_without_another_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "db.sqlite3")
+            recorder = HistoryRecorder(database)
+            recorder.observe(bench_snapshot(state="STOPPED", cycle=0, cycles=10, run_s=40), action="start_requested", target_cycles=1)
+            recorder.observe({"connection": {"state": "DISCONNECTED"}})
+            recorder.observe(bench_snapshot(state="STOPPED", cycle=1, cycles=11, run_s=44))
+            session = recorder.sessions()[0]
+            self.assertEqual(session["status"], "COMPLETED")
+            self.assertEqual(session["delta"]["cycles"], 1)
+            self.assertTrue(session["has_link_gap"])
+            self.assertTrue(any(e["kind"] == "start_requested" for e in recorder.events()))
+            database.close()
+
     def test_history_csv_exports_session_and_events_with_utc_filter(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             old_data_dir = app_module.DATA_DIR

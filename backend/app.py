@@ -313,11 +313,24 @@ def upload_to_bench(profile_id: str) -> dict:
 @bench_operation
 def start_bench(request: StartRequest) -> dict:
     try:
-        app.state.bench.control("start", request.cycles)
+        app.state.bench.refresh()
+        if app.state.bench.profile_id is None:
+            raise BenchError("Upload a profile in this session before starting")
+        if (app.state.bench.status or {}).get("state") != "STOPPED":
+            raise BenchError("Bench must be STOPPED before starting a new cycle target")
     except BenchError as error:
         raise bench_error(error) from error
-    app.state.history.observe(app.state.bench.snapshot(), action="start",
-                              target_cycles=request.cycles)
+    app.state.history.observe(app.state.bench.snapshot(), action="start_requested", target_cycles=request.cycles)
+    try:
+        app.state.bench.control("start", request.cycles)
+    except BenchError as error:
+        outcome = app.state.bench.last_control or {}
+        if outcome.get("rejected"):
+            app.state.history.reject_start(str(error))
+            raise bench_error(error) from error
+        app.state.history.notice("command_unconfirmed", {"action": "start", "acknowledged": outcome.get("acknowledged", False), "reason": str(error)})
+        raise bench_error(BenchError(f"Start outcome is unconfirmed. Do not send Start again; reconnect to observe the bench. {error}")) from error
+    app.state.history.observe(app.state.bench.snapshot(), action="start_acknowledged")
     return current_snapshot(app.state.database, app.state.instance_id)
 
 
@@ -362,6 +375,9 @@ def control_bench(action: str) -> dict:
     try:
         app.state.bench.control(action)
     except BenchError as error:
+        app.state.history.notice("command_unconfirmed", {"action": action, "acknowledged": (app.state.bench.last_control or {}).get("acknowledged", False), "reason": str(error)})
+        if action == "stop":
+            raise bench_error(BenchError(f"Stop state not confirmed — bench may still be running. {error}")) from error
         raise bench_error(error) from error
     app.state.history.observe(app.state.bench.snapshot(), action=action)
     return current_snapshot(app.state.database, app.state.instance_id)

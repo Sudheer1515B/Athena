@@ -92,7 +92,7 @@ Acceptance: simulator evidence and meaningful backend/widget tests pass; release
 | R1 | Complete | 21 backend tests; supplied-simulator one-cycle run persisted with no browser polling, +1 cycle/+4 run_s. |
 | R2 | Complete | 22 backend and 11 Flutter tests; capped retry delay, stale warning and disabled Start verified. |
 | R3 | Complete | 24 backend tests; changed capacity rejected and observed reboot saved with uncertain stop time. |
-| R4 | In progress | Persist start request before command and report unconfirmed outcomes next. |
+| R4 | Implemented; STOP fault check pending | 26 backend tests; supplied simulator lost START reply and interrupted upload verified without automatic retry. |
 | R5–R8 | Planned | Execute after the preceding acceptance checks. |
 | R9 | Planned / hardware conditional | Supplied simulator available; physical servo and 16-channel equipment unverified. |
 

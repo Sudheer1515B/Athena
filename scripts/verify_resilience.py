@@ -142,6 +142,25 @@ def verify(output):
                 assert completed["delta"]["run_s"] == 4, completed
                 results["browser_absent"] = completed
                 assert len([c for c in simulator.commands if c.startswith("START ")]) == 1
+                simulator.drop_reply_for = "START "
+                lost = client.post("/api/v1/bench/start", json={"cycles": 1})
+                assert lost.status_code == 409 and "unconfirmed" in lost.text, lost.text
+                session_id = recorder.sessions()[0]["id"]
+                recovered = wait_session(recorder, session_id)
+                assert recovered["status"] == "COMPLETED", recovered
+                assert recovered["delta"]["cycles"] == 1 and recovered["has_link_gap"], recovered
+                assert len([c for c in simulator.commands if c.startswith("START ")]) == 2
+                results["lost_start_reply"] = recovered
+                simulator.drop_reply_for = "F 10 "
+                failed = client.post(f"/api/v1/bench/upload/{profile['id']}")
+                assert failed.status_code == 409, failed.text
+                time.sleep(2)
+                assert module.app.state.bench.profile_id is None
+                starts = len([c for c in simulator.commands if c.startswith("START ")])
+                denied = client.post("/api/v1/bench/start", json={"cycles": 1})
+                assert denied.status_code == 409, denied.text
+                assert len([c for c in simulator.commands if c.startswith("START ")]) == starts
+                results["interrupted_upload"] = {"http_status": failed.status_code, "verified_profile": None, "automatic_start_sent": False}
                 results["command_counts"] = {verb: sum(c.split()[0] == verb for c in simulator.commands)
                                              for verb in ("START", "LOAD", "COMMIT", "CLEAR")}
         finally:

@@ -31,6 +31,8 @@ class UsbBench:
         self.trace: deque[dict] = deque(maxlen=180)
         self.transport = "USB"
         self.time_synced_at: str | None = None
+        self.verified_frame_count: int | None = None
+        self.last_control: dict | None = None
 
     def _validate_info(self) -> None:
         info = self.info or {}
@@ -92,6 +94,7 @@ class UsbBench:
             self.status = None
             self.counters = None
             self.profile_id = None
+            self.verified_frame_count = None
             self.trace.clear()
             self.time_synced_at = None
 
@@ -155,6 +158,8 @@ class UsbBench:
             if previous_info and (any(info.get(key) != previous_info.get(key) for key in ("proto", "team", "ch", "maxframes"))
                                   or int(info.get("up", "0")) < int(previous_info.get("up", "0"))):
                 self.profile_id = None
+            if self.verified_frame_count is not None and int(status.get("frames", "0")) != self.verified_frame_count:
+                self.profile_id = None
             self.info, self.status, self.counters = info, status, counters
             try:
                 widths = [int(value) for value in status["us"].split(",")]
@@ -197,6 +202,7 @@ class UsbBench:
             if reply != f"OK SUM={expected_sum}":
                 raise BenchError(f"Bench checksum mismatch: {reply}")
             self.profile_id = profile_id
+            self.verified_frame_count = len(frames)
             return self.refresh()
 
     def control(self, action: str, cycles: int = 1) -> dict:
@@ -211,7 +217,13 @@ class UsbBench:
                 command = action.upper()
             else:
                 raise BenchError("Unsupported bench control")
-            self.command(command)
+            self.last_control = {"action": action, "acknowledged": False, "rejected": False}
+            try:
+                self.command(command)
+            except BenchError as error:
+                self.last_control["rejected"] = f"{command.split()[0]}: ERR" in str(error)
+                raise
+            self.last_control["acknowledged"] = True
             if action == "start":
                 self.trace.clear()
             return self.refresh()
