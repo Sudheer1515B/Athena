@@ -320,6 +320,17 @@ void main() {
         .getClip(const Size(300, 100))
         .height;
     expect(revealHeight(), 0);
+    expect(
+      tester
+          .widget<ColoredBox>(
+            find.descendant(
+              of: find.byType(HoverMetricTile),
+              matching: find.byType(ColoredBox),
+            ),
+          )
+          .color,
+      Palette.ink,
+    );
 
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: const Offset(0, 0));

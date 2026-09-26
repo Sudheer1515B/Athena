@@ -320,7 +320,7 @@ The simulator proves protocol and app integration, not electrical output or actu
 
 - Saved and pushed the user's existing `main.dart` and `theme.dart` edits first as commit `e1fb600`, leaving `IMPLEMENTATION_PLAN.md.zip` untouched.
 - Restyled the Flutter web dashboard with a near-black background, squared dark panels, high-contrast white text, a yellow ATHENA title and yellow primary controls. The header now adapts to narrower windows. Profile import and error panels were updated to remain legible in the dark palette.
-- Added a bottom-up yellow reveal to the four read-only dashboard metric tiles. Each tile shows a black-text copy of its content over the rising panel on hover; other tiles remain dark. The animation reverses on pointer exit and excludes the overlay copy from accessibility semantics.
+- Added a bottom-up white reveal to the four read-only dashboard metric tiles. Each tile shows a dark-text copy of its content over the rising panel on hover; other tiles remain dark. The animation reverses on pointer exit and excludes the overlay copy from accessibility semantics.
 - Flutter analysis reported no issues; seven widget tests passed, including mouse enter/exit reveal behavior and compact-header layout. The release web build succeeded. A 1440×900 local browser screenshot confirmed the dashboard layout and contrast while the backend was offline. No bench was contacted or modified for this styling work.
 
 ## Future entry template

@@ -143,7 +143,7 @@ class _HoverMetricTileState extends State<HoverMetricTile> {
         width: double.infinity,
         decoration: BoxDecoration(
           color: Palette.card,
-          border: Border.all(color: hovered ? Palette.brand : Palette.line),
+          border: Border.all(color: hovered ? Palette.ink : Palette.line),
         ),
         child: Stack(
           children: [
@@ -152,7 +152,7 @@ class _HoverMetricTileState extends State<HoverMetricTile> {
               child: ClipRect(
                 clipper: _BottomRevealClipper(reveal),
                 child: ColoredBox(
-                  color: Palette.brand,
+                  color: Palette.ink,
                   child: ExcludeSemantics(child: _content(inverted: true)),
                 ),
               ),
