@@ -120,6 +120,29 @@ class _AthenaShellState extends State<AthenaShell> {
       body: Column(
         children: [
           _topBar(),
+          if (widget.state.uploading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Semantics(
+                liveRegion: true,
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Uploading profile…',
+                      style: TextStyle(
+                        color: Palette.brand,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text('Please wait for the bench to confirm the upload.'),
+                    SizedBox(height: 8),
+                    LinearProgressIndicator(),
+                  ],
+                ),
+              ),
+            ),
           if (widget.state.error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),

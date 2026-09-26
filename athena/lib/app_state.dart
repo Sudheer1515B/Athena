@@ -12,6 +12,7 @@ class AppState extends ChangeNotifier {
   BenchSnapshot? snapshot;
   String? error;
   bool loading = false;
+  bool uploading = false;
   bool historyLoading = false;
   String? historyError;
   List<Map<String, dynamic>> historySessions = const [];
@@ -77,7 +78,7 @@ class AppState extends ChangeNotifier {
   Future<void> clearSimulatorCounters() =>
       _operate(_api.clearSimulatorCounters);
   Future<void> uploadProfile(String id) =>
-      _operate(() => _api.uploadProfile(id));
+      _operate(() => _api.uploadProfile(id), uploadingProfile: true);
   Future<void> control(String action, {int cycles = 1}) =>
       _operate(() => _api.control(action, cycles: cycles));
 
@@ -110,9 +111,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _operate(Future<BenchSnapshot> Function() operation) async {
+  Future<void> _operate(
+    Future<BenchSnapshot> Function() operation, {
+    bool uploadingProfile = false,
+  }) async {
     if (_disposed || loading) return;
     loading = true;
+    uploading = uploadingProfile;
     error = null;
     notifyListeners();
     try {
@@ -124,6 +129,7 @@ class AppState extends ChangeNotifier {
       );
     } finally {
       loading = false;
+      uploading = false;
       if (!_disposed) notifyListeners();
     }
   }

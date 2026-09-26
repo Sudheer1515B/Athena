@@ -30,7 +30,7 @@ Look for CH340 / USB Serial and hardware ID `VID:PID=1A86:7523`. Note its COM nu
 Replace `COM5` below with the identified receiver port:
 
 ```powershell
-.\.venv\Scripts\python.exe -m serial.tools.miniterm COM5 115200
+.\.venv\Scripts\python.exe -m serial.tools.miniterm --dtr 0 --rts 0 COM5 115200
 ```
 
 Close other serial monitors before opening this port. Expected idle output is approximately:
@@ -40,6 +40,8 @@ t=...ms | OUT0 1500us/20000us #... | OUT1 1500us/20000us #... | OUT2 1500us/2000
 ```
 
 The first number is pulse HIGH time, the second is full period, and `#` is the received pulse count. `NO SIGNAL` means that input has not received a valid recent pulse; check bench power, signal wiring and common ground. Uploading a profile does not itself change the PWM widths: replay starts after START. Values that remain constant can also be correct for a constant segment of the profile.
+
+A miniterm heading (`COM…`, quit/menu shortcuts) is printed by the laptop, not the ESP32. The receiver firmware should print even with no PWM wires connected. If the heading appears but no receiver text arrives, verify the receiver's COM identity by unplugging/reconnecting only that board, use the explicit DTR/RTS settings above, and briefly press EN/RESET on the receiver only (not BOOT or the bench reset button). On 26 September, a read with DTR/RTS unasserted on the Mac verified this receiver's intact firmware and all four idle PWM inputs; the Windows silence itself has not been reproduced or conclusively diagnosed on Windows.
 
 Press **Ctrl + ]** to exit miniterm. Exiting this monitor does not stop a bench replay; use Athena's **Stop** button for that.
 

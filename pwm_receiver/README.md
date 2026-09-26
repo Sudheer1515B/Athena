@@ -34,10 +34,12 @@ Power both boards over separate Mac USB cables. Do not join their 3V3 or 5V pins
 To monitor the receiver from this Mac after wiring:
 
 ```sh
-.venv/bin/python -m serial.tools.miniterm /dev/cu.usbserial-10 115200
+.venv/bin/python -m serial.tools.miniterm --dtr 0 --rts 0 /dev/cu.usbserial-10 115200
 ```
 
 The output reports `OUTn <high width>us/<period>us #<pulse count>` every 250 ms. Expected idle is around `1500us/20000us`. A `NO SIGNAL` line means no valid pulse arrived on that input in the last 100 ms. Quit miniterm with Ctrl-]. Do not open `/dev/cu.usbserial-0001` in this terminal; that port belongs to the WDR bench and Athena uses it.
+
+On reconnection to the Mac on 26 September, the CH340 receiver enumerated as `/dev/cu.usbserial-110`; the CP2102 bench remained `/dev/cu.usbserial-0001` with serial `0001`. A six-second read of only the verified receiver, with DTR/RTS unasserted, printed its firmware banner and all four inputs at 1499–1500 µs HIGH with 19,999–20,000 µs periods. Substitute the currently enumerated receiver port in the command above. No firmware upload was needed.
 
 ## Verified no-loss physical check
 

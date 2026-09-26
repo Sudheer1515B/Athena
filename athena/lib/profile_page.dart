@@ -610,12 +610,22 @@ class _ProfilePageState extends State<ProfilePage> {
                 busy || uploading || widget.benchBusy || !widget.benchConnected
                 ? null
                 : uploadCompiledProfile,
-            icon: const Icon(Icons.upload, size: 18),
-            label: Text(switch (widget.transport) {
-              'SIMULATOR' => 'Upload to simulator',
-              'WIFI' => 'Upload to Wi-Fi bench',
-              _ => 'Upload to USB bench',
-            }),
+            icon: uploading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload, size: 18),
+            label: Text(
+              uploading
+                  ? 'Uploading…'
+                  : switch (widget.transport) {
+                      'SIMULATOR' => 'Upload to simulator',
+                      'WIFI' => 'Upload to Wi-Fi bench',
+                      _ => 'Upload to USB bench',
+                    },
+            ),
           ),
           if (!widget.benchConnected) ...[
             const SizedBox(height: 8),

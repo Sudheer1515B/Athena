@@ -378,6 +378,7 @@ void main() {
       final second = state.uploadProfile('profile-two');
       expect(api.uploadCalls, 1);
       expect(state.loading, isTrue);
+      expect(state.uploading, isTrue);
       api.pending.complete(
         BenchSnapshot.fromJson({
           'connection': {'state': 'CONNECTED'},
@@ -386,7 +387,48 @@ void main() {
       );
       await Future.wait([first, second]);
       expect(state.loading, isFalse);
+      expect(state.uploading, isFalse);
       state.dispose();
     },
   );
+
+  testWidgets('upload indicator stays visible across tabs until confirmation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = BlockingUploadApi();
+    final state = AppState(api: api);
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MyApp(state: state));
+    final pending = state.uploadProfile('profile-one');
+    await tester.pump();
+    expect(find.text('Uploading profile…'), findsOneWidget);
+    await tester.tap(find.text('PROFILE'));
+    await tester.pump();
+    expect(find.text('Uploading profile…'), findsOneWidget);
+    api.pending.complete(
+      BenchSnapshot.fromJson({
+        'connection': {'state': 'CONNECTED'},
+        'history_counts': <String, int>{},
+      }),
+    );
+    await pending;
+    await tester.pump();
+    expect(find.text('Uploading profile…'), findsNothing);
+  });
+
+  test('failed upload clears progress and exposes the error', () async {
+    final api = BlockingUploadApi();
+    final state = AppState(api: api);
+    final pending = state.uploadProfile('profile-one');
+    api.pending.completeError(StateError('Checksum confirmation failed'));
+    await pending;
+    expect(state.uploading, isFalse);
+    expect(state.loading, isFalse);
+    expect(state.error, contains('Checksum confirmation failed'));
+    state.dispose();
+  });
 }
