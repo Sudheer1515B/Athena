@@ -488,3 +488,7 @@ Rollback: `pre-motor-monitoring-20260926` pins prior tested motor-send commit5ec
 ## Entry 035 — 26 September 2026 — Simplify dashboard monitoring
 
 Removed the standalone “Measured PWM · independent receiver” dashboard card and the Measured PWM field from each Drone motor monitoring channel card, as requested. Live bench STATUS graph, reported PWM values, freshness handling and approval-gated recovery remain unchanged. Receiver backend support remains available; no hardware commands or firmware changes were made. Flutter analyze and all three existing motor-monitoring widget tests passed; release web rebuild passed for the running dashboard.
+
+## Entry 036 — 26 September 2026 — Recovery dialog layout only
+
+User narrowed the screenshot request to UI layout; identity/reconnect logic was not edited. Constrained the native recovery dialog content to 520 px, enabled scrolling on small windows, separated the explanation from the cycle field by 24 px and kept its label floated. Added spacing and button wrapping to the recovery banner. Existing approval behavior is unchanged. Flutter analyze and all four existing receiver/recovery widget tests passed; release web build passed. No bench commands, power changes or playback were initiated.

@@ -987,7 +987,9 @@ class _AthenaShellState extends State<AthenaShell> {
             'Bench returned · permission required to restart playback',
             style: TextStyle(color: Palette.brand, fontWeight: FontWeight.w700),
           ),
+          const SizedBox(height: 8),
           Text(proposal['message'].toString()),
+          const SizedBox(height: 8),
           Text(
             'Remaining cycles from saved counters: ${proposal['remaining_cycles'] ?? 'unknown'} · last observed frame: ${proposal['last_observed_frame'] ?? 'unknown'}',
           ),
@@ -996,8 +998,10 @@ class _AthenaShellState extends State<AthenaShell> {
               proposal['error'].toString(),
               style: const TextStyle(color: Palette.critical),
             ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 10,
+            runSpacing: 8,
             children: [
               FilledButton(
                 onPressed: widget.state.loading || !widget.state.benchLive
@@ -1007,22 +1011,34 @@ class _AthenaShellState extends State<AthenaShell> {
                         final cycles = await showDialog<int>(
                           context: context,
                           builder: (context) => AlertDialog(
+                            scrollable: true,
+                            insetPadding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 24,
+                            ),
                             title: const Text('Approve re-upload and restart?'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'The saved profile will be uploaded again and outputs will move. Playback restarts at frame 0. The interrupted cycle repeats; progress around power loss can be uncertain.',
-                                ),
-                                TextFormField(
-                                  initialValue: cycleText,
-                                  onChanged: (value) => cycleText = value,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Whole cycles to run',
+                            content: SizedBox(
+                              width: 520,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'The saved profile will be uploaded again and outputs will move. Playback restarts at frame 0. The interrupted cycle repeats; progress around power loss can be uncertain.',
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 24),
+                                  TextFormField(
+                                    initialValue: cycleText,
+                                    onChanged: (value) => cycleText = value,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Whole cycles to run',
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                             actions: [
                               TextButton(
