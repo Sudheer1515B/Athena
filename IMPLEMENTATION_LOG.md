@@ -373,6 +373,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Flutter now labels stale/disconnected observations, warns that the bench may still be running, labels old traces, and disables Start/Pause/Resume/manual SET/upload when readings are stale. Browser snapshot requests time out after five seconds; browser-to-backend failure is distinguished from a bench reconnect. A connected Stop remains available as an explicit attempt.
 - All 22 backend tests and 11 Flutter tests passed, including capped retry scheduling and stale observations not enabling Start. No physical connection, upload or replay was used for these checks. The previous demo backend remains running with the old release until final activation.
 
+## Entry 023 — 26 September 2026 — R3 recovery identity and reboot observation
+
+- Explicit connections now pin protocol/team/channel count/frame capacity for recovery. A changed capability set blocks automatic recovery, records an identity-mismatch event, and requires deliberate reconnection. Recovery still sends only connection/observation/time-sync commands; matching frame count does not restore verified profile identity.
+- An observed uptime decrease records a reboot, invalidates upload verification and ends an affected open session as REBOOT_OBSERVED with uncertain exact stop time. The UI exposes the reboot/recovery warning. WDR v1 still cannot uniquely identify a physical board or prove an unchanged profile after takeover; a reboot whose uptime has already exceeded the prior observation may also be undetectable.
+- All 24 backend tests passed, including changed-capacity rejection and reboot-session uncertainty. These were controlled fake-transport checks; full supplied-simulator fault scenarios remain in R9. No real bench command or firmware change was performed.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

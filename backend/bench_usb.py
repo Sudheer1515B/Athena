@@ -151,6 +151,10 @@ class UsbBench:
             except BenchError:
                 self.info = self.status = self.counters = None
                 raise
+            previous_info = self.info or {}
+            if previous_info and (any(info.get(key) != previous_info.get(key) for key in ("proto", "team", "ch", "maxframes"))
+                                  or int(info.get("up", "0")) < int(previous_info.get("up", "0"))):
+                self.profile_id = None
             self.info, self.status, self.counters = info, status, counters
             try:
                 widths = [int(value) for value in status["us"].split(",")]

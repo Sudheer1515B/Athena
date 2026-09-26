@@ -183,7 +183,7 @@ def current_snapshot(connection: sqlite3.Connection, instance_id: str) -> dict:
     }
     if getattr(app.state, "desired_tcp", None) is not None and \
             result["connection"]["state"] == "DISCONNECTED":
-        result["connection"]["state"] = "RECONNECTING"
+        result["connection"]["state"] = "RECOVERY_REQUIRED" if (result.get("observation") or {}).get("blocked_reason") else "RECONNECTING"
     return result
 
 
@@ -217,14 +217,28 @@ def bench_operation(function):
     return guarded
 
 
+def reset_monitor_identity():
+    monitor = getattr(app.state, "monitor", None)
+    if monitor is not None and monitor.api_database is app.state.database:
+        monitor.reset_identity()
+
+
+def pin_monitor_identity():
+    monitor = getattr(app.state, "monitor", None)
+    if monitor is not None and monitor.api_database is app.state.database:
+        monitor.pin_identity()
+
+
 @app.post("/api/v1/bench/usb/connect")
 @bench_operation
 def connect_usb(request: UsbConnectRequest) -> dict:
     try:
+        reset_monitor_identity()
         app.state.desired_tcp = None
         app.state.bench.disconnect()
         app.state.bench = UsbBench()
         app.state.bench.connect(request.port)
+        pin_monitor_identity()
     except (BenchError, OSError, ValueError) as error:
         raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
@@ -234,11 +248,13 @@ def connect_usb(request: UsbConnectRequest) -> dict:
 @bench_operation
 def connect_simulator(request: SimulatorConnectRequest) -> dict:
     try:
+        reset_monitor_identity()
         app.state.desired_tcp = None
         app.state.bench.disconnect()
         app.state.bench = TcpBench()
         app.state.bench.connect("127.0.0.1", request.port)
         app.state.desired_tcp = ("127.0.0.1", request.port, "SIM")
+        pin_monitor_identity()
     except (BenchError, OSError, ValueError) as error:
         raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
@@ -248,11 +264,13 @@ def connect_simulator(request: SimulatorConnectRequest) -> dict:
 @bench_operation
 def connect_tcp(request: TcpConnectRequest) -> dict:
     try:
+        reset_monitor_identity()
         app.state.desired_tcp = None
         app.state.bench.disconnect()
         app.state.bench = TcpBench(expected_team=None)
         app.state.bench.connect(request.host.strip(), request.port)
         app.state.desired_tcp = (request.host.strip(), request.port, None)
+        pin_monitor_identity()
     except (BenchError, OSError, ValueError) as error:
         raise bench_error(error) from error
     return current_snapshot(app.state.database, app.state.instance_id)
@@ -262,6 +280,7 @@ def connect_tcp(request: TcpConnectRequest) -> dict:
 @bench_operation
 def disconnect_usb() -> dict:
     app.state.desired_tcp = None
+    reset_monitor_identity()
     app.state.bench.disconnect()
     return current_snapshot(app.state.database, app.state.instance_id)
 

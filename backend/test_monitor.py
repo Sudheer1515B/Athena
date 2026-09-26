@@ -37,6 +37,59 @@ class AdvancingBench:
 
 
 class MonitorTests(unittest.TestCase):
+    def test_reconnect_rejects_changed_capabilities_without_mutating_bench(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "history.sqlite3")
+            original = AdvancingBench()
+            recorder = HistoryRecorder(database)
+            state = SimpleNamespace(database=database, bench=original, history=recorder,
+                                    desired_tcp=("127.0.0.1", 3333, "SIM"), reconnect_after=0)
+            replacement = AdvancingBench()
+            normal = replacement.snapshot
+            def changed():
+                live = normal()
+                live["connection"]["bench"]["maxframes"] = "4000"
+                return live
+            replacement.snapshot = changed
+            replacement.connect = lambda host, port: None
+            monitor = BenchMonitor(state, lambda **kwargs: replacement)
+            monitor.pin_identity()
+            monitor.capture()
+            original.disconnect()
+            monitor.tick()
+            self.assertFalse(replacement.connected)
+            self.assertIn("capabilities changed", monitor.blocked_reason)
+            self.assertTrue(any(e["kind"] == "identity_mismatch" for e in recorder.events()))
+            database.close()
+
+    def test_reboot_closes_affected_session_with_uncertain_time(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = open_database(Path(directory) / "history.sqlite3")
+            original = AdvancingBench()
+            recorder = HistoryRecorder(database)
+            recorder.observe(original.snapshot(), action="start", target_cycles=1)
+            state = SimpleNamespace(database=database, bench=original, history=recorder,
+                                    desired_tcp=("127.0.0.1", 3333, "SIM"), reconnect_after=0)
+            replacement = AdvancingBench()
+            replacement.reads = 2
+            normal = replacement.snapshot
+            def rebooted():
+                live = normal()
+                live["connection"]["bench"]["up"] = "0"
+                return live
+            replacement.snapshot = rebooted
+            replacement.connect = lambda host, port: None
+            monitor = BenchMonitor(state, lambda **kwargs: replacement)
+            monitor.pin_identity()
+            monitor.capture()
+            original.disconnect()
+            monitor.tick()
+            session = recorder.sessions()[0]
+            self.assertEqual(session["status"], "REBOOT_OBSERVED")
+            self.assertEqual(session["identity_confidence"], "uncertain")
+            self.assertIn("reboot observed", monitor.snapshot()["observation"]["recovery_warning"])
+            database.close()
+
     def test_retry_delay_is_capped_and_explicit_disconnect_disables_retry(self):
         with tempfile.TemporaryDirectory() as directory:
             database = open_database(Path(directory) / "history.sqlite3")

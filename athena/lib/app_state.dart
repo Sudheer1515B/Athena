@@ -29,6 +29,8 @@ class AppState extends ChangeNotifier {
       snapshot?.connectionState == 'CONNECTED' &&
       snapshot!.isFresh;
   String? get connectionWarning {
+    if (snapshot?.connectionState == 'RECOVERY_REQUIRED') return snapshot?.observation?['blocked_reason']?.toString() ?? 'Bench changed. Review its identity and reconnect explicitly.';
+    if (snapshot?.observation?['recovery_warning'] != null) return snapshot!.observation!['recovery_warning'].toString();
     if (_pollError)
       return 'Athena service is unavailable. Readings are stale; the bench may still be running.';
     if (snapshot?.connectionState == 'RECONNECTING') {

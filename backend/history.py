@@ -14,6 +14,7 @@ STOP_CAUSES = {
     "MANUAL_STOP": "Manual Stop command",
     "STOPPED_OBSERVED": "Stopped state observed; cause unknown",
     "SUPERSEDED": "Controller started another session",
+    "REBOOT_OBSERVED": "Bench reboot observed; exact stop time unknown",
 }
 
 
@@ -193,7 +194,9 @@ class HistoryRecorder:
                 self._last_run_cycle[bench_id] = reported_cycle
             state = status.get("state")
             if active_session is not None:
-                if action == "stop":
+                if live.get("reboot_detected"):
+                    self._end_session(session_id, "REBOOT_OBSERVED", stamp, "uncertain")
+                elif action == "stop":
                     self._end_session(session_id, "MANUAL_STOP", stamp, "observed")
                 elif state == "STOPPED" and action != "start":
                     completed = (active_session["target_cycles"] > 0
@@ -208,6 +211,16 @@ class HistoryRecorder:
                     self.database.execute(
                         "UPDATE sessions SET status=? WHERE id=?", (state, session_id),
                     )
+
+    def notice(self, kind: str, details: dict) -> None:
+        with self._lock, self.database:
+            bench_id = self._connected_bench_id or self._last_bench_id
+            if bench_id is None:
+                return
+            active = self.database.execute(
+                "SELECT id FROM sessions WHERE bench_id=? AND ended_at IS NULL ORDER BY created_at DESC LIMIT 1", (bench_id,),
+            ).fetchone()
+            self._event(bench_id, active["id"] if active else None, kind, now_utc(), details, "uncertain")
 
     def _end_session(self, session_id: str, status: str, stamp: str,
                      confidence: str) -> None:
