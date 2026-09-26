@@ -289,9 +289,8 @@ class _ProfilePageState extends State<ProfilePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFECEC),
+              color: const Color(0xFF2B1111),
               border: Border.all(color: Palette.critical),
-              borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               error!,
@@ -323,9 +322,8 @@ class _ProfilePageState extends State<ProfilePage> {
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFFFAFAF8),
-            border: Border.all(color: const Color(0xFFC9C8C3), width: 2),
-            borderRadius: BorderRadius.circular(10),
+            color: Palette.background,
+            border: Border.all(color: Palette.line),
           ),
           child: Column(
             children: [

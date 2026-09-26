@@ -1,7 +1,10 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:athena/app_state.dart';
 import 'package:athena/main.dart';
 import 'package:athena/bench_api.dart';
 import 'package:athena/live_trace.dart';
+import 'package:athena/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -179,7 +182,7 @@ void main() {
     final state = AppState();
     addTearDown(state.dispose);
     await tester.pumpWidget(MyApp(state: state));
-    await tester.tap(find.text('Profile'));
+    await tester.tap(find.text('PROFILE'));
     await tester.pump();
     expect(find.text('1 · SOURCE LOG'), findsOneWidget);
     expect(find.text('4 · PUSH TO BENCH'), findsOneWidget);
@@ -232,7 +235,7 @@ void main() {
       final state = AppState(api: FakeHistoryApi());
       addTearDown(state.dispose);
       await tester.pumpWidget(MyApp(state: state));
-      await tester.tap(find.text('History'));
+      await tester.tap(find.text('HISTORY'));
       await tester.pumpAndSettle();
       expect(
         find.text('Observed active hours by channel'.toUpperCase()),
@@ -276,7 +279,7 @@ void main() {
     final state = AppState(api: FakeHistoryApi());
     addTearDown(state.dispose);
     await tester.pumpWidget(MyApp(state: state));
-    await tester.tap(find.text('History'));
+    await tester.tap(find.text('HISTORY'));
     await tester.pumpAndSettle();
     final uncertain = find.textContaining('UNCONFIRMED');
     await tester.ensureVisible(uncertain);
@@ -285,6 +288,61 @@ void main() {
     expect(find.textContaining('Uncertain coverage:'), findsOneWidget);
     expect(find.textContaining('Counter delta: Unknown'), findsOneWidget);
     expect(find.textContaining('Source file: Unknown'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('metric tile reveal rises on hover and retreats on exit', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 300,
+              child: HoverMetricTile(
+                label: 'Cycles completed',
+                value: '12',
+                detail: 'Lifetime bench total',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final clip = find.descendant(
+      of: find.byType(HoverMetricTile),
+      matching: find.byType(ClipRect),
+    );
+    double revealHeight() => tester
+        .widget<ClipRect>(clip)
+        .clipper!
+        .getClip(const Size(300, 100))
+        .height;
+    expect(revealHeight(), 0);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(0, 0));
+    await mouse.moveTo(tester.getCenter(find.byType(HoverMetricTile)));
+    await tester.pumpAndSettle();
+    expect(revealHeight(), closeTo(100, 0.01));
+
+    await mouse.moveTo(const Offset(0, 0));
+    await tester.pumpAndSettle();
+    expect(revealHeight(), closeTo(0, 0.01));
+    await mouse.removePointer();
+  });
+
+  testWidgets('dashboard header fits a compact browser window', (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MyApp(state: state));
+    expect(find.text('ATHENA'), findsOneWidget);
+    expect(find.text('SETTINGS'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

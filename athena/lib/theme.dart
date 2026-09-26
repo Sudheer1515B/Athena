@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 class Palette {
-  static const background = Color.fromRGBO(0, 0, 0, 0);
-  static const card = Color.fromRGBO(0, 0, 0, 1);
-  static const ink = Color.fromRGBO(247, 243, 243, 1);
-  static const secondary = Color.fromRGBO(255, 255, 255, 1);
-  static const muted = Color.fromRGBO(224, 220, 107, 1);
-  static const line = Color.fromRGBO(255, 204, 0, 1);
-  static const brand = Color.fromRGBO(200, 48, 46, 1);
-  static const good = Color.fromRGBO(12, 163, 12, 1);
-  static const critical = Color.fromRGBO(208, 59, 59, 1);
+  static const background = Color(0xFF050505);
+  static const card = Color(0xFF101010);
+  static const ink = Color(0xFFF6F6F2);
+  static const secondary = Color(0xFFE3E3DE);
+  static const muted = Color(0xFFA1A19A);
+  static const line = Color(0xFF3D3D38);
+  static const brand = Color(0xFFF3E64D);
+  static const good = Color(0xFF7ADBA2);
+  static const critical = Color(0xFFFF7777);
 
   static const series = [
     Color.fromRGBO(42, 120, 214, 1),
@@ -46,7 +46,6 @@ class BenchCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: Palette.card,
       border: Border.all(color: Palette.line),
-      borderRadius: BorderRadius.circular(0),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,8 +56,8 @@ class BenchCard extends StatelessWidget {
             style: const TextStyle(
               color: Palette.secondary,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 12),
@@ -67,4 +66,118 @@ class BenchCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// A read-only dashboard tile with a bottom-up inverse-color reveal on hover.
+class HoverMetricTile extends StatefulWidget {
+  const HoverMetricTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.detail,
+  });
+
+  final String label;
+  final String value;
+  final String detail;
+
+  @override
+  State<HoverMetricTile> createState() => _HoverMetricTileState();
+}
+
+class _HoverMetricTileState extends State<HoverMetricTile> {
+  bool hovered = false;
+
+  Widget _content({required bool inverted}) {
+    final foreground = inverted ? Palette.background : Palette.ink;
+    final subtle = inverted ? Palette.background : Palette.muted;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.label.toUpperCase(),
+            style: TextStyle(
+              color: foreground,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.45,
+            ),
+          ),
+          const SizedBox(height: 13),
+          Text(
+            widget.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 30,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            widget.detail,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: subtle, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => hovered = true),
+    onExit: (_) => setState(() => hovered = false),
+    child: TweenAnimationBuilder<double>(
+      tween: Tween(end: hovered ? 1 : 0),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      builder: (context, reveal, _) => Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Palette.card,
+          border: Border.all(color: hovered ? Palette.brand : Palette.line),
+        ),
+        child: Stack(
+          children: [
+            _content(inverted: false),
+            Positioned.fill(
+              child: ClipRect(
+                clipper: _BottomRevealClipper(reveal),
+                child: ColoredBox(
+                  color: Palette.brand,
+                  child: ExcludeSemantics(child: _content(inverted: true)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _BottomRevealClipper extends CustomClipper<Rect> {
+  const _BottomRevealClipper(this.progress);
+
+  final double progress;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTWH(
+    0,
+    size.height * (1 - progress),
+    size.width,
+    size.height * progress,
+  );
+
+  @override
+  bool shouldReclip(_BottomRevealClipper oldClipper) =>
+      oldClipper.progress != progress;
 }

@@ -316,6 +316,13 @@ The simulator proves protocol and app integration, not electrical output or actu
 - The physical bench automatically completed after four seconds. Athena saved a COMPLETED session with **+1 cycle, +4 run_s, +4 active_s on each output**. Authoritative lifetime counters advanced to `cycles=25 run_s=34 active_s=33,33,33,16`. Seventeen Athena STATUS samples showed changing commanded pulse values. The separate receiver logged 21 valid four-channel samples during the run; 16 active samples had periods 19,999–20,000 µs and each channel's measured widths were within 2, 3, 7, and 7 µs respectively of a value in the uploaded profile. This nearest-value check establishes compatible physical output ranges, not frame-perfect time alignment.
 - [Saved run evidence](captures/real_wifi_flight_20260926.json) includes bench INFO, before/after counters, compiled profile summary/hash, sampled status, persisted session/detail and raw/parsed receiver readings. A separate read-only Wi-Fi check after disconnect confirmed STOPPED at idle with the 200-frame profile still committed and counters unchanged from the completed run. The user's in-progress edits to `athena/lib/main.dart` and `athena/lib/theme.dart` were left untouched.
 
+## Entry 014 — 26 September 2026 — Dark dashboard and rising tile hover
+
+- Saved and pushed the user's existing `main.dart` and `theme.dart` edits first as commit `e1fb600`, leaving `IMPLEMENTATION_PLAN.md.zip` untouched.
+- Restyled the Flutter web dashboard with a near-black background, squared dark panels, high-contrast white text, a yellow ATHENA title and yellow primary controls. The header now adapts to narrower windows. Profile import and error panels were updated to remain legible in the dark palette.
+- Added a bottom-up yellow reveal to the four read-only dashboard metric tiles. Each tile shows a black-text copy of its content over the rising panel on hover; other tiles remain dark. The animation reverses on pointer exit and excludes the overlay copy from accessibility semantics.
+- Flutter analysis reported no issues; seven widget tests passed, including mouse enter/exit reveal behavior and compact-header layout. The release web build succeeded. A 1440×900 local browser screenshot confirmed the dashboard layout and contrast while the backend was offline. No bench was contacted or modified for this styling work.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:

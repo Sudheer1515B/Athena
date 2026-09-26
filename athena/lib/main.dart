@@ -41,7 +41,43 @@ class _MyAppState extends State<MyApp> {
       useMaterial3: true,
       scaffoldBackgroundColor: Palette.background,
       fontFamily: 'Roboto',
-      colorScheme: ColorScheme.fromSeed(seedColor: Palette.brand),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Palette.brand,
+        brightness: Brightness.dark,
+        surface: Palette.card,
+      ),
+      textTheme: ThemeData(brightness: Brightness.dark).textTheme
+          .apply(bodyColor: Palette.ink, displayColor: Palette.ink),
+      dividerColor: Palette.line,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Palette.card,
+        labelStyle: const TextStyle(color: Palette.muted),
+        hintStyle: const TextStyle(color: Palette.muted),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Palette.line),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Palette.brand),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: Palette.brand,
+          foregroundColor: Palette.background,
+          shape: const RoundedRectangleBorder(),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Palette.ink,
+          side: const BorderSide(color: Palette.line),
+          shape: const RoundedRectangleBorder(),
+        ),
+      ),
     ),
     home: AthenaShell(state: state),
   );
@@ -151,44 +187,84 @@ class _AthenaShellState extends State<AthenaShell> {
     final connected = widget.state.snapshot?.connectionState == 'CONNECTED';
     final reconnecting =
         widget.state.snapshot?.connectionState == 'RECONNECTING';
-    return Container(
-      height: 56,
-      color: const Color(0xFF111111),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          const Text(
-            'WELKINRIM',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              letterSpacing: .4,
-            ),
+    final status = widget.state.error != null
+        ? _chip('CHECK MESSAGE', Palette.critical)
+        : _chip(
+            connected
+                ? 'BENCH CONNECTED'
+                : reconnecting
+                ? 'RECONNECTING'
+                : 'BENCH DISCONNECTED',
+            connected ? Palette.good : Palette.muted,
+          );
+    const brand = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'ATHENA',
+          style: TextStyle(
+            color: Palette.brand,
+            fontSize: 25,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.7,
           ),
-          const SizedBox(width: 6),
-          const Text(
-            'Replay Bench',
-            style: TextStyle(
-              color: Color(0xFFF26A68),
-              fontWeight: FontWeight.w700,
-            ),
+        ),
+        SizedBox(height: 5),
+        Text(
+          'WELKINRIM  /  REPLAY BENCH',
+          style: TextStyle(
+            color: Palette.secondary,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.3,
           ),
-          const SizedBox(width: 32),
-          for (final item in AthenaPage.values) _navItem(item),
-          const Spacer(),
-          if (widget.state.error != null)
-            _chip('CHECK MESSAGE', Palette.critical)
-          else
-            _chip(
-              connected
-                  ? 'BENCH CONNECTED'
-                  : reconnecting
-                  ? 'RECONNECTING'
-                  : 'BENCH DISCONNECTED',
-              connected ? Palette.good : Palette.muted,
-            ),
-        ],
-      ),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 900;
+        return Container(
+          constraints: const BoxConstraints(minHeight: 76),
+          decoration: const BoxDecoration(
+            color: Palette.background,
+            border: Border(bottom: BorderSide(color: Palette.line)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (constraints.maxWidth < 500) ...[
+                      brand,
+                      const SizedBox(height: 10),
+                      status,
+                    ] else
+                      Row(children: [brand, const Spacer(), status]),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final item in AthenaPage.values) _navItem(item),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    brand,
+                    const SizedBox(width: 44),
+                    for (final item in AthenaPage.values) _navItem(item),
+                    const Spacer(),
+                    status,
+                  ],
+                ),
+        );
+      },
     );
   }
 
@@ -202,15 +278,20 @@ class _AthenaShellState extends State<AthenaShell> {
           if (item == AthenaPage.history) widget.state.loadHistory();
         },
         style: TextButton.styleFrom(
-          foregroundColor: selected ? Colors.white : const Color(0xFFBBBBBB),
-          backgroundColor: selected ? const Color(0xFF2A2A2A) : null,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          foregroundColor: selected ? Palette.brand : Palette.secondary,
+          backgroundColor: selected ? Palette.card : null,
+          shape: const RoundedRectangleBorder(),
+          textStyle: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
         ),
         child: Text(switch (item) {
-          AthenaPage.dashboard => 'Dashboard',
-          AthenaPage.profile => 'Profile',
-          AthenaPage.history => 'History',
-          AthenaPage.settings => 'Settings',
+          AthenaPage.dashboard => 'DASHBOARD',
+          AthenaPage.profile => 'PROFILE',
+          AthenaPage.history => 'HISTORY',
+          AthenaPage.settings => 'SETTINGS',
         }),
       ),
     );
@@ -218,10 +299,7 @@ class _AthenaShellState extends State<AthenaShell> {
 
   Widget _chip(String label, Color dot) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-    decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xFF333333)),
-      borderRadius: BorderRadius.circular(20),
-    ),
+    decoration: BoxDecoration(border: Border.all(color: Palette.line)),
     child: Row(
       children: [
         Container(
@@ -232,7 +310,7 @@ class _AthenaShellState extends State<AthenaShell> {
         const SizedBox(width: 7),
         Text(
           label,
-          style: const TextStyle(color: Color(0xFFDDDDDD), fontSize: 12.5),
+          style: const TextStyle(color: Palette.secondary, fontSize: 11),
         ),
       ],
     ),
@@ -343,34 +421,8 @@ class _AthenaShellState extends State<AthenaShell> {
     );
   }
 
-  Widget _tile(String label, String value, String detail) => BenchCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            color: Palette.secondary,
-            fontSize: 12.5,
-            letterSpacing: .6,
-          ),
-        ),
-        const SizedBox(height: 7),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Palette.ink,
-            fontSize: 30,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        Text(
-          detail,
-          style: const TextStyle(color: Palette.muted, fontSize: 12.5),
-        ),
-      ],
-    ),
-  );
+  Widget _tile(String label, String value, String detail) =>
+      HoverMetricTile(label: label, value: value, detail: detail);
 
   Widget _channels() {
     final snapshot = widget.state.snapshot;
@@ -533,9 +585,7 @@ class _AthenaShellState extends State<AthenaShell> {
       children: [
         const Text(
           'WDR Protocol v1 · USB bench or local simulator',
-          style: TextStyle(
-            color: Palette.ink,
-            fontWeight: FontWeight.w600),
+          style: TextStyle(color: Palette.ink, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         const Text(
@@ -758,9 +808,8 @@ class _AthenaShellState extends State<AthenaShell> {
   Widget _banner(String message) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFECEC),
+      color: const Color(0xFF2B1111),
       border: Border.all(color: Palette.critical),
-      borderRadius: BorderRadius.circular(8),
     ),
     child: Text(message, style: const TextStyle(color: Palette.critical)),
   );
