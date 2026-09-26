@@ -399,6 +399,12 @@ The simulator proves protocol and app integration, not electrical output or actu
 - Activated backend on local port 8080 after finding no previous backend there. Receiver-only connection opened `/dev/cu.usbserial-10` (CH340 1a86:7523); independent physical readings were fresh, all four channels 1499–1500 us HIGH / 20,000 us period. The WDR USB port was not opened and no physical upload, Start, Stop, Clear or firmware change was sent. Actual jumper-removal/power-cut rehearsal remains user-operated, not yet observed here. Native Windows bridge execution also remains unverified.
 - Added `PHYSICAL_FEEDBACK_AND_RECOVERY.md` with startup, wiring, physical demo expectations, approval limits and rollback references. Mac hardware launcher now lets the backend own receiver serial and displays its measurements, avoiding two serial readers.
 
+## Entry 027 — 26 September 2026 — preparing four real actuators
+
+- User reports the hardware team is connecting four actual motors/actuators to the bench outputs. Treat this as a transition from signal-only testing to loaded hardware; previous signal-only motion authorization does not establish model-specific compatibility.
+- Added `ACTUATOR_BRINGUP.md`: device/driver/power/limit questions, output-to-receiver/actuator signal mapping, independent supply/common ground, initial finite test sequence, actual STOP=1500 us behavior, recovery approval and measurement coverage limits. Asked for device models/type and supply ratings before model-specific profile settings or motion.
+- No code/firmware changes, bench commands, upload, replay, reset or counter clear were performed. Loaded operation remains unverified. The receiver detects loss at its input; it cannot detect a separate actuator branch being unplugged while its own signal remains present.
+
 ## Future entry template
 
 Copy this structure for each implementation session; do not fill it with unperformed work:
