@@ -445,3 +445,12 @@ Next concrete action:
 ```
 
 Use statuses Not started / In progress / Blocked / Complete for milestones. A complete milestone requires its acceptance gate, not just committed code. Record test failures and corrections even when a later rerun passes. Distinguish application tests from vendor-simulator tests and simulator evidence from hardware evidence.
+# Entry 032 — 2026-09-26 — Requested GPIO33 low signal
+
+Authorization: user requested setting the connected pin previously identified as 33 to 1000 microseconds. Interpreted as bench GPIO33/OUT3; board identity ambiguity remains documented if wiring differs.
+
+Changes: added explicit `--channel 0..3` selection to `scripts/esc_pulse_probe.py`, defaulting to OUT0, and status readback after `--set-only`.
+
+Hardware execution: `.venv/bin/python -u scripts/esc_pulse_probe.py --host 10.178.45.105 --run --set-only --channel 3`. Preflight identified WDR_REFERENCE, four channels, STOPPED, 1200 stored frames, uptime 558. Sent only `SET 3 1000`. Readback was STOPPED with `us=1000,1500,1500,1000`; exit 0. No START, STOP, upload, counter clear, or firmware change. Other outputs unchanged.
+
+Result: requested bench-reported signal verified. Physical motor idle and ESC disarming not observed; guaranteed disarming requires motor power removal. Receiver GPIO33 is not bench OUT3.

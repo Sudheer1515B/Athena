@@ -13,8 +13,9 @@ from backend.bench_usb import TcpBench
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="10.178.45.105")
+    parser.add_argument("--channel", type=int, choices=range(4), default=0, help="Bench output: 0=GPIO25, 1=GPIO26, 2=GPIO27, 3=GPIO33")
     parser.add_argument("--run", action="store_true", help="Props removed, motors secured, power cutoff attended: issue the pulse probe")
-    parser.add_argument("--set-only", action="store_true", help="With --run, set only OUT0 to 1000 us; do not perform the 1100-us test")
+    parser.add_argument("--set-only", action="store_true", help="With --run, set only the selected output to 1000 us; do not perform the 1100-us test")
     args = parser.parse_args()
     bench = TcpBench(expected_team="WDR_REFERENCE")
     armed = False
@@ -28,23 +29,25 @@ def main():
             print("Read-only preflight complete. No output command sent.", flush=True)
             return
         if args.set_only:
-            bench.set_pulse(0, 1000)
-            print("OUT0 set to 1000 us. OUT1–OUT3 untouched; no STOP sent.", flush=True)
+            bench.set_pulse(args.channel, 1000)
+            print(f"OUT{args.channel} set to 1000 us. Other channels untouched; no STOP sent.", flush=True)
+            bench.refresh()
+            print("Reported state: " + json.dumps(bench.status), flush=True)
             return
         armed = True
-        bench.set_pulse(0, 1000)
-        print("OUT0 commanded to 1000 us; waiting 3 seconds. Other channels are untouched. This is a typical PWM ESC low input, not a verified model-specific stop.", flush=True)
+        bench.set_pulse(args.channel, 1000)
+        print(f"OUT{args.channel} commanded to 1000 us; waiting 3 seconds. Other channels are untouched. This is a typical PWM ESC low input, not a verified model-specific stop.", flush=True)
         time.sleep(3)
-        bench.set_pulse(0, 1100)
-        print("OUT0 commanded to 1100 us for 2 seconds. Other channels are untouched.", flush=True)
+        bench.set_pulse(args.channel, 1100)
+        print(f"OUT{args.channel} commanded to 1100 us for 2 seconds. Other channels are untouched.", flush=True)
         time.sleep(2)
     finally:
         if armed:
             try:
                 if not bench.connected:
                     raise RuntimeError("Bench connection lost")
-                bench.set_pulse(0, 1000)
-                print("Returned OUT0 to 1000 us. Other channels untouched. Disconnect motor power before bench reset, upload, STOP or profile playback: those can produce 1500 us.", flush=True)
+                bench.set_pulse(args.channel, 1000)
+                print(f"Returned OUT{args.channel} to 1000 us. Other channels untouched. Disconnect motor power before bench reset, upload, STOP or profile playback: those can produce 1500 us.", flush=True)
             except Exception as error:
                 print(f"OUTPUT RETURN NOT CONFIRMED: {error}. Disconnect motor power now.", file=sys.stderr, flush=True)
         bench.disconnect()
